@@ -24,8 +24,8 @@ jobs:
       - name: Install dependencies
         run: sudo bash install.sh
       
-      - name: Compile kernel
-        run: bash .github/workflows/compile.sh
+      - name: Compile kernel without running
+        run: bash build.sh
       
       - name: Upload kernel artifact
         uses: actions/upload-artifact@v4

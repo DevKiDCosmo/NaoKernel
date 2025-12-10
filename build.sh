@@ -27,6 +27,8 @@ gcc -fno-stack-protector -m32 -c kernel.c -o bin/kc.o
 echo "Linking kernel..."
 ld -m elf_i386 -T link.ld -o bin/kernel bin/kasm.o bin/kc.o bin/output.o bin/input.o bin/shell.o
 
-# Run in QEMU
-echo "Starting NaoKernel..."
-qemu-system-i386 -kernel bin/kernel
+# Run in QEMU if --run argument is provided
+if [[ "$1" == "--run" ]]; then
+    echo "Starting NaoKernel..."
+    qemu-system-i386 -kernel bin/kernel
+fi

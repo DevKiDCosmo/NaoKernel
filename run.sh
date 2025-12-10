@@ -12,6 +12,8 @@ mkfs.fat -F 16 disk.img
 
 cd ..
 
+echo "Starting NaoKernel with mounted disk image..."
+
 qemu-system-i386 -kernel bin/kernel -hda run/disk.img # -m 512M -boot c -serial stdio
 
 # Small doc
