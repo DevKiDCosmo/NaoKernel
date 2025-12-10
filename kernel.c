@@ -4,6 +4,8 @@
 */
 #include "keyboard_map.h"
 #include "shell/shell.h"
+#include "output/output.h"
+#include "input/input.h"
 
 /* there are 25 lines each of 80 columns; each element takes 2 bytes */
 #define LINES 25
@@ -30,11 +32,6 @@ extern void load_idt(unsigned long *idt_ptr);
 unsigned int current_loc = 0;
 /* video memory begins at address 0xb8000 */
 char *vidptr = (char*)0xb8000;
-
-/* Forward declarations */
-void kprint(const char *str);
-void kprint_newline(void);
-void clear_screen(void);
 
 struct IDT_entry {
 	unsigned short int offset_lowerbits;
@@ -106,30 +103,6 @@ void kb_init(void)
 	write_port(0x21 , 0xFD);
 }
 
-void kprint(const char *str)
-{
-	unsigned int i = 0;
-	while (str[i] != '\0') {
-		vidptr[current_loc++] = str[i++];
-		vidptr[current_loc++] = 0x07;
-	}
-}
-
-void kprint_newline(void)
-{
-	unsigned int line_size = BYTES_FOR_EACH_ELEMENT * COLUMNS_IN_LINE;
-	current_loc = current_loc + (line_size - current_loc % (line_size));
-}
-
-void clear_screen(void)
-{
-	unsigned int i = 0;
-	while (i < SCREENSIZE) {
-		vidptr[i++] = ' ';
-		vidptr[i++] = 0x07;
-	}
-}
-
 void keyboard_handler_main(void)
 {
 	unsigned char status;
@@ -153,13 +126,13 @@ void keyboard_handler_main(void)
 void kmain(void)
 {
 	clear_screen();
-	kprint("NaoKernel - Initializing...\n");
+	kprint("NaoKernel - Initializing...");
 	kprint_newline();
 
 	idt_init();
 	kb_init();
 
-	/* Start nano shell */
+	/* Start shell */
 	nano_shell();
 
 	while(1);

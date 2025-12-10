@@ -13,3 +13,7 @@ Add an syntax for "" and  \"
 > echo "Hello World!"
 $ Hello World!
 ```
+
+
+What to make better?
+First create an map with function and command instead of registring every command manually.
