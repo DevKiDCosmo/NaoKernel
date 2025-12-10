@@ -41,6 +41,8 @@ char* input_getline(InputBuffer *inp);
 void input_add_char(InputBuffer *inp, char c);
 void input_backspace(InputBuffer *inp);
 void input_complete(InputBuffer *inp);
+void input_set_history(CommandHistory *hist);
+CommandHistory* input_get_history(void);
 
 /* History functions */
 void history_init(CommandHistory *hist);

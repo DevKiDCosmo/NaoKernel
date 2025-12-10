@@ -85,6 +85,18 @@ void input_print_prompt(InputBuffer *inp)
 	}
 }
 
+/* Set the command history for input system */
+void input_set_history(CommandHistory *hist)
+{
+	global_history = *hist;
+}
+
+/* Get the updated history back */
+CommandHistory* input_get_history(void)
+{
+	return &global_history;
+}
+
 /* Get input line (blocking) - waits for Enter key */
 char* input_getline(InputBuffer *inp)
 {
@@ -155,9 +167,28 @@ void input_complete(InputBuffer *inp)
 	kprint_newline();
 }
 
+/* Clear input buffer and redraw from history */
+static void input_load_from_history(InputBuffer *inp, const char *history_cmd)
+{
+	int i;
+	/* Clear current input by backspacing */
+	while (inp->position > 0) {
+		input_backspace(inp);
+	}
+	
+	/* Load history command into buffer */
+	if (history_cmd) {
+		for (i = 0; history_cmd[i] != '\0' && i < MAX_INPUT_LENGTH - 1; i++) {
+			input_add_char(inp, history_cmd[i]);
+		}
+	}
+}
+
 /* Handle keyboard input */
 void input_handle_keyboard(char keycode)
 {
+	char *history_cmd;
+	
 	/* Ignore key release events (keycode < 0 or >= 0x80) */
 	if (keycode < 0 || keycode >= 0x80) {
 		return;
@@ -172,6 +203,22 @@ void input_handle_keyboard(char keycode)
 	/* Handle Backspace key */
 	if (keycode == BACKSPACE_KEY_CODE) {
 		input_backspace(&global_input);
+		return;
+	}
+	
+	/* Handle Up Arrow - previous command in history */
+	if (keycode == UP_ARROW_KEY_CODE) {
+		history_cmd = history_previous(&global_history);
+		if (history_cmd) {
+			input_load_from_history(&global_input, history_cmd);
+		}
+		return;
+	}
+	
+	/* Handle Down Arrow - next command in history */
+	if (keycode == DOWN_ARROW_KEY_CODE) {
+		history_cmd = history_next(&global_history);
+		input_load_from_history(&global_input, history_cmd);
 		return;
 	}
 	

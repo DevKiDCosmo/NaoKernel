@@ -160,8 +160,8 @@ static int strlen_custom(const char *str)
 	return len;
 }
 
-/* Parse and execute shell commands */
-void shell_execute_command(char *command)
+/* Parse and execute shell commands - returns 1 if command found, 0 if not */
+int shell_execute_command(char *command)
 {
 	char *cmd_start;
 	char *cmd_end;
@@ -175,7 +175,7 @@ void shell_execute_command(char *command)
 	
 	/* Empty command */
 	if (cmd_start[0] == '\0') {
-		return;
+		return 0;  /* Don't count empty commands as valid */
 	}
 	
 	/* Find end of command (first space or end of string) */
@@ -201,7 +201,7 @@ void shell_execute_command(char *command)
 				/* Call without arguments */
 				((CommandFunc)cmd->func)();
 			}
-			return;
+			return 1;  /* Command found and executed */
 		}
 	}
 	
@@ -214,12 +214,14 @@ void shell_execute_command(char *command)
 	*cmd_end = temp;
 	kprint_newline();
 	kprint("Type 'help' for available commands.\n");
+	return 0;  /* Command not found */
 }
 
 /* Shell main loop */
 void nano_shell(void)
 {
 	char *line;
+	int command_valid;
 	
 	kprint("\n=== NaoKernel Shell ===\n");
 	kprint("Type 'help' for available commands.\n");
@@ -231,17 +233,22 @@ void nano_shell(void)
 	/* Initialize command history */
 	history_init(&history);
 	
+	/* Share history with input system for arrow key navigation */
+	input_set_history(&history);
+	
 	while (shell_running) {
 		/* Get line of input (blocks until Enter is pressed) */
 		line = input_getline(&input);
 		
-		/* Add to history if not empty */
-		if (line[0] != '\0') {
-			history_add(&history, line);
-		}
+		/* Execute command and check if it was valid */
+		command_valid = shell_execute_command(line);
 		
-		/* Execute command */
-		shell_execute_command(line);
+		/* Only add valid commands to history */
+		if (command_valid && line[0] != '\0') {
+			history_add(&history, line);
+			/* Update input system's history */
+			input_set_history(&history);
+		}
 	}
 }
 
