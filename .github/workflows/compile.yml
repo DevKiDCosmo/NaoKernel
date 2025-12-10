@@ -1,0 +1,29 @@
+name: Compile Kernel
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Install dependencies
+        run: bash install.sh
+      
+      - name: Compile kernel
+        run: bash build.sh
+      
+      - name: Upload kernel artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: kernel-qemu
+          path: |
+            kernel
+            kernel.bin
+          retention-days: 30
