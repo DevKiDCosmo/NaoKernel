@@ -30,6 +30,11 @@ void kprint(const char *str)
 {
 	unsigned int i = 0;
 	while (str[i] != '\0') {
+		/* Check if we need to scroll before printing */
+		if (current_loc >= SCREENSIZE) {
+			scroll_screen();
+		}
+		
 		/* Check for newline character (ASCII 10) and handle line break */
 		if (str[i] == CHAR_NEWLINE) {
 			kprint_newline();
@@ -42,11 +47,39 @@ void kprint(const char *str)
 	update_hardware_cursor();
 }
 
+/* Scroll the screen up by one line */
+void scroll_screen(void)
+{
+	unsigned int i;
+	unsigned int line_size = BYTES_FOR_EACH_ELEMENT * COLUMNS_IN_LINE;
+	
+	/* Copy each line to the line above it */
+	for (i = 0; i < (LINES - 1) * line_size; i++) {
+		vidptr[i] = vidptr[i + line_size];
+	}
+	
+	/* Clear the last line */
+	for (i = (LINES - 1) * line_size; i < LINES * line_size; i += 2) {
+		vidptr[i] = ' ';
+		vidptr[i + 1] = 0x07;
+	}
+	
+	/* Move cursor to start of last line */
+	current_loc = (LINES - 1) * line_size;
+	update_hardware_cursor();
+}
+
 /* Print a newline */
 void kprint_newline(void)
 {
 	unsigned int line_size = BYTES_FOR_EACH_ELEMENT * COLUMNS_IN_LINE;
 	current_loc = current_loc + (line_size - current_loc % (line_size));
+	
+	/* Check if we need to scroll */
+	if (current_loc >= SCREENSIZE) {
+		scroll_screen();
+	}
+	
 	update_hardware_cursor();
 }
 

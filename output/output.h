@@ -21,6 +21,7 @@ void kprint_char(char c);
 void kprint_hex(unsigned int num);
 void kprint_dec(int num);
 void clear_screen(void);
+void scroll_screen(void);
 
 /* Cursor management */
 unsigned int get_cursor_position(void);

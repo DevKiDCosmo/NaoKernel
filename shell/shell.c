@@ -5,10 +5,26 @@
 
 #include "../input/input.h"
 #include "../output/output.h"
+#include "../essentials/types.h"
 
 /* Shell state */
 static InputBuffer input;
+static CommandHistory history;
 static int shell_running = 1;
+
+/* Command function pointer types */
+typedef void (*CommandFunc)(void);
+typedef void (*CommandFuncWithArgs)(char *);
+
+/* Command structure */
+typedef struct {
+	const char *name;
+	void *func;
+	int takes_argument;
+	const char *description;
+} Command;
+
+static Command command_map[];
 
 /* Command implementations */
 
@@ -16,12 +32,16 @@ static int shell_running = 1;
 void cmd_help(void)
 {
 	kprint("Available commands:\n");
-	kprint("  help    - Show this help message\n");
-	kprint("  clear   - Clear the screen\n");
-	kprint("  echo    - Echo text to screen\n");
-	kprint("  about   - Show system information\n");
-	kprint("  exit    - Shutdown the system\n");
-	kprint("  test    - Run a test command\n");
+	int i;
+	Command *cmd;
+	for (i = 0; command_map[i].name != 0; i++) {
+		cmd = &command_map[i];
+		kprint(" - ");
+		kprint(cmd->name);
+		kprint(": ");
+		kprint(cmd->description);
+		kprint_newline();
+	}
 }
 
 /* Clear command - clear the screen */
@@ -63,6 +83,55 @@ void cmd_test(void)
 	kprint("Test command executed successfully.\n");
 }
 
+void cmd_history(void)
+{
+	kprint("Command History:\n");
+	int i;
+	for (i = 0; i < history.count; i++) {
+		char num_str[16];
+		int num = i + 1;
+		int len = 0;
+		int temp = num;
+		
+		/* Convert number to string */
+		if (temp == 0) {
+			num_str[0] = '0';
+			len = 1;
+		} else {
+			while (temp > 0) {
+				num_str[len++] = '0' + (temp % 10);
+				temp /= 10;
+			}
+			/* Reverse the string */
+			int j;
+			for (j = 0; j < len / 2; j++) {
+				char tmp = num_str[j];
+				num_str[j] = num_str[len - 1 - j];
+				num_str[len - 1 - j] = tmp;
+			}
+		}
+		num_str[len] = '\0';
+		
+		/* Print: number. command */
+		kprint(num_str);
+		kprint(". ");
+		kprint(history.commands[i]);
+		kprint_newline();
+	}
+}
+
+/* Command map - array of all available commands */
+static Command command_map[] = {
+	{"help", (void*)cmd_help, 0, "Show available commands"},
+	{"clear", (void*)cmd_clear, 0, "Clear the screen"},
+	{"echo", (void*)cmd_echo, 1, "Echo text to screen"},
+	{"about", (void*)cmd_about, 0, "Show system information"},
+	{"exit", (void*)cmd_exit, 0, "Shutdown the system"},
+	{"test", (void*)cmd_test, 0, "Run a test command"},
+	{"history", (void*)cmd_history, 0, "Show command history"},
+	{0, 0, 0, 0}  /* Sentinel entry */
+};
+
 /* Skip leading whitespace */
 static char* skip_spaces(char *str)
 {
@@ -72,59 +141,77 @@ static char* skip_spaces(char *str)
 	return str;
 }
 
+/* Find the first space in a string and return pointer to it */
+static char* find_space(char *str)
+{
+	while (*str != '\0' && *str != ' ' && *str != '\t') {
+		str++;
+	}
+	return str;
+}
+
+/* Calculate string length */
+static int strlen_custom(const char *str)
+{
+	int len = 0;
+	while (str[len] != '\0') {
+		len++;
+	}
+	return len;
+}
+
 /* Parse and execute shell commands */
 void shell_execute_command(char *command)
 {
-	char *cmd;
+	char *cmd_start;
+	char *cmd_end;
+	char *args;
+	int cmd_len;
+	int i;
+	Command *cmd;
 	
 	/* Skip leading spaces */
-	cmd = skip_spaces(command);
+	cmd_start = skip_spaces(command);
 	
 	/* Empty command */
-	if (cmd[0] == '\0') {
+	if (cmd_start[0] == '\0') {
 		return;
 	}
 	
-	/* Help command */
-	if (strcmp_custom(cmd, "help") == 0) {
-		cmd_help();
-		return;
+	/* Find end of command (first space or end of string) */
+	cmd_end = find_space(cmd_start);
+	cmd_len = cmd_end - cmd_start;
+	
+	/* Get arguments (everything after first space) */
+	args = skip_spaces(cmd_end);
+	
+	/* Search through command map */
+	for (i = 0; command_map[i].name != 0; i++) {
+		cmd = &command_map[i];
+		
+		/* Check if command name matches */
+		if (strncmp_custom(cmd_start, cmd->name, cmd_len) == 0 && 
+		    strlen_custom(cmd->name) == cmd_len) {
+			
+			/* Execute command based on whether it takes arguments */
+			if (cmd->takes_argument) {
+				/* Call with arguments */
+				((CommandFuncWithArgs)cmd->func)(args);
+			} else {
+				/* Call without arguments */
+				((CommandFunc)cmd->func)();
+			}
+			return;
+		}
 	}
 	
-	/* Clear command */
-	if (strcmp_custom(cmd, "clear") == 0) {
-		cmd_clear();
-		return;
-	}
-	
-	/* About command */
-	if (strcmp_custom(cmd, "about") == 0) {
-		cmd_about();
-		return;
-	}
-	
-	/* Exit command */
-	if (strcmp_custom(cmd, "exit") == 0) {
-		cmd_exit();
-		return;
-	}
-
-	if (strcmp_custom(cmd, "test") == 0) {
-		cmd_test();
-		return;
-	}
-	
-	/* Echo command */
-	if (strncmp_custom(cmd, "echo", 4) == 0) {
-		char *args = cmd + 4;
-		args = skip_spaces(args);
-		cmd_echo(args);
-		return;
-	}
-	
-	/* Unknown command */
+	/* Unknown command - print just the command name */
 	kprint("Unknown command: ");
-	kprint(cmd);
+	/* Temporarily null-terminate command for printing */
+	char temp = *cmd_end;
+	*cmd_end = '\0';
+	kprint(cmd_start);
+	*cmd_end = temp;
 	kprint_newline();
 	kprint("Type 'help' for available commands.\n");
 }
@@ -135,14 +222,23 @@ void nano_shell(void)
 	char *line;
 	
 	kprint("\n=== NaoKernel Shell ===\n");
-	kprint("Type 'help' for available commands.\n\n");
+	kprint("Type 'help' for available commands.\n");
+	kprint("Use UP/DOWN arrows to browse command history.\n\n");
 	
 	/* Initialize input system with prompt */
 	input_init(&input, "> ");
 	
+	/* Initialize command history */
+	history_init(&history);
+	
 	while (shell_running) {
 		/* Get line of input (blocks until Enter is pressed) */
 		line = input_getline(&input);
+		
+		/* Add to history if not empty */
+		if (line[0] != '\0') {
+			history_add(&history, line);
+		}
 		
 		/* Execute command */
 		shell_execute_command(line);

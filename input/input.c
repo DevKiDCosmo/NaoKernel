@@ -12,9 +12,13 @@ extern unsigned char keyboard_map[128];
 extern void kprint(const char *str);
 extern void kprint_newline(void);
 extern void update_hardware_cursor(void);
+extern void scroll_screen(void);
+
+#define SCREENSIZE (2 * 80 * 25)
 
 /* Global input buffer */
 static InputBuffer global_input;
+static CommandHistory global_history;
 
 /* String utility functions */
 int strcmp_custom(const char *s1, const char *s2)
@@ -111,6 +115,11 @@ char* input_getline(InputBuffer *inp)
 void input_add_char(InputBuffer *inp, char c)
 {
 	if (inp->position < MAX_INPUT_LENGTH - 1) {
+		/* Check if we need to scroll before adding character */
+		if (current_loc >= SCREENSIZE) {
+			scroll_screen();
+		}
+		
 		inp->buffer[inp->position++] = c;
 		inp->buffer[inp->position] = '\0';
 		
@@ -174,4 +183,79 @@ void input_handle_keyboard(char keycode)
 			input_add_char(&global_input, ch);
 		}
 	}
+}
+
+/* Initialize command history */
+void history_init(CommandHistory *hist)
+{
+	int i, j;
+	hist->count = 0;
+	hist->current = -1;
+	
+	for (i = 0; i < MAX_HISTORY; i++) {
+		for (j = 0; j < MAX_INPUT_LENGTH; j++) {
+			hist->commands[i][j] = '\0';
+		}
+	}
+}
+
+/* Add command to history */
+void history_add(CommandHistory *hist, const char *command)
+{
+	/* Don't add empty commands */
+	if (command[0] == '\0') {
+		return;
+	}
+	
+	/* Shift older commands if history is full */
+	if (hist->count >= MAX_HISTORY) {
+		int i;
+		for (i = 0; i < MAX_HISTORY - 1; i++) {
+			strcpy_custom(hist->commands[i], hist->commands[i + 1]);
+		}
+		hist->count = MAX_HISTORY - 1;
+	}
+	
+	/* Add new command to end */
+	strcpy_custom(hist->commands[hist->count], command);
+	hist->count++;
+	hist->current = -1;  /* Reset position after adding new command */
+}
+
+/* Get previous command from history */
+char* history_previous(CommandHistory *hist)
+{
+	if (hist->count == 0) {
+		return 0;
+	}
+	
+	if (hist->current == -1) {
+		hist->current = hist->count - 1;
+	} else if (hist->current > 0) {
+		hist->current--;
+	}
+	
+	return hist->commands[hist->current];
+}
+
+/* Get next command from history */
+char* history_next(CommandHistory *hist)
+{
+	if (hist->count == 0) {
+		return 0;
+	}
+	
+	if (hist->current < hist->count - 1) {
+		hist->current++;
+		return hist->commands[hist->current];
+	}
+	
+	hist->current = -1;
+	return 0;
+}
+
+/* Reset history position */
+void history_reset_position(CommandHistory *hist)
+{
+	hist->current = -1;
 }

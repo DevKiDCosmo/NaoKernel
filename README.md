@@ -1,5 +1,13 @@
 # Nao Kernel
 
+What I want:
+- An custom bootloader
+- An custom kernel
+- A functional operating system with filesystem
+- Services and background processesw
+
+Disclaimer: I use AI for the bare minium thing (I just didn't get the hang out of it.). Afterwards I code entire structures myself.
+
 A minimal x86 kernel with an integrated shell.
 
 ## Features
