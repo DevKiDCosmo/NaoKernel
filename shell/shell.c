@@ -92,6 +92,8 @@ void cmd_history(void)
 		int num = i + 1;
 		int len = 0;
 		int temp = num;
+
+		// Add additional spacing for alignment
 		
 		/* Convert number to string */
 		if (temp == 0) {
@@ -115,7 +117,13 @@ void cmd_history(void)
 		/* Print: number. command */
 		kprint(num_str);
 		kprint(". ");
-		kprint(history.commands[i]);
+		
+		/* Print command in red if invalid, white if valid */
+		if (history.valid[i]) {
+			kprint(history.commands[i]);
+		} else {
+			kprint_colored(history.commands[i], 0x04);  /* Red text */
+		}
 		kprint_newline();
 	}
 }
@@ -160,6 +168,29 @@ static int strlen_custom(const char *str)
 	return len;
 }
 
+/* Convert character to lowercase */
+static char to_lower(char c)
+{
+	if (c >= 'A' && c <= 'Z') {
+		return c + ('a' - 'A');
+	}
+	return c;
+}
+
+/* Case-insensitive string comparison */
+static int strncmp_case_insensitive(const char *s1, const char *s2, int n)
+{
+	int i;
+	for (i = 0; i < n; i++) {
+		char c1 = to_lower(s1[i]);
+		char c2 = to_lower(s2[i]);
+		if (c1 != c2 || c1 == '\0' || c2 == '\0') {
+			return (unsigned char)c1 - (unsigned char)c2;
+		}
+	}
+	return 0;
+}
+
 /* Parse and execute shell commands - returns 1 if command found, 0 if not */
 int shell_execute_command(char *command)
 {
@@ -189,8 +220,8 @@ int shell_execute_command(char *command)
 	for (i = 0; command_map[i].name != 0; i++) {
 		cmd = &command_map[i];
 		
-		/* Check if command name matches */
-		if (strncmp_custom(cmd_start, cmd->name, cmd_len) == 0 && 
+		/* Check if command name matches (case-insensitive) */
+		if (strncmp_case_insensitive(cmd_start, cmd->name, cmd_len) == 0 && 
 		    strlen_custom(cmd->name) == cmd_len) {
 			
 			/* Execute command based on whether it takes arguments */
@@ -243,9 +274,9 @@ void nano_shell(void)
 		/* Execute command and check if it was valid */
 		command_valid = shell_execute_command(line);
 		
-		/* Only add valid commands to history */
-		if (command_valid && line[0] != '\0') {
-			history_add(&history, line);
+		/* Add all non-empty commands to history (both valid and invalid) */
+		if (line[0] != '\0') {
+			history_add(&history, line, command_valid);
 			/* Update input system's history */
 			input_set_history(&history);
 		}

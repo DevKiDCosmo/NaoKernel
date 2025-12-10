@@ -199,3 +199,7 @@ Possible additions:
 - Password mode (no echo)
 - Multi-line input
 - Syntax highlighting
+
+
+
+SHIFT is still now working. Once pressed it is on forever.

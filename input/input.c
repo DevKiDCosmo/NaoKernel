@@ -4,21 +4,32 @@
  */
 
 #include "input.h"
+#include "../output/output.h"
 
 /* External references */
 extern unsigned int current_loc;
 extern char *vidptr;
 extern unsigned char keyboard_map[128];
+extern unsigned char keyboard_map_shifted[128];
 extern void kprint(const char *str);
 extern void kprint_newline(void);
 extern void update_hardware_cursor(void);
 extern void scroll_screen(void);
 
-#define SCREENSIZE (2 * 80 * 25)
-
 /* Global input buffer */
 static InputBuffer global_input;
 static CommandHistory global_history;
+
+/* Keyboard state */
+static int shift_pressed = 0;
+static int caps_lock_on = 0;
+static int escape_state = 0;  /* Track if we're in escape sequence */
+
+/* Check if shift is currently pressed by reading keyboard controller */
+static int is_shift_pressed(void)
+{                                          
+	return shift_pressed;
+}
 
 /* String utility functions */
 int strcmp_custom(const char *s1, const char *s2)
@@ -60,6 +71,20 @@ void strcpy_custom(char *dest, const char *src)
 	dest[i] = '\0';
 }
 
+/* Custom memcpy implementation */
+void* memcpy_custom(void *dest, const void *src, int n)
+{
+	int i;
+	char *d = (char*)dest;
+	const char *s = (const char*)src;
+	
+	for (i = 0; i < n; i++) {
+		d[i] = s[i];
+	}
+	
+	return dest;
+}
+
 /* Initialize input buffer */
 void input_init(InputBuffer *inp, char *prompt)
 {
@@ -88,7 +113,18 @@ void input_print_prompt(InputBuffer *inp)
 /* Set the command history for input system */
 void input_set_history(CommandHistory *hist)
 {
-	global_history = *hist;
+	int i, j;
+	
+	/* Copy history data field by field to avoid memcpy */
+	global_history.count = hist->count;
+	global_history.current = hist->current;
+	
+	for (i = 0; i < MAX_HISTORY; i++) {
+		global_history.valid[i] = hist->valid[i];
+		for (j = 0; j < MAX_INPUT_LENGTH; j++) {
+			global_history.commands[i][j] = hist->commands[i][j];
+		}
+	}
 }
 
 /* Get the updated history back */
@@ -184,13 +220,99 @@ static void input_load_from_history(InputBuffer *inp, const char *history_cmd)
 	}
 }
 
+/* Scroll through history by pages */
+static void input_scroll_history(CommandHistory *hist, int direction)
+{
+	int step = 5;  /* Scroll 5 commands at a time */
+	int i;
+	
+	if (hist->count == 0) {
+		return;
+	}
+	
+	if (direction > 0) {
+		/* Page Up - go backwards in history */
+		for (i = 0; i < step; i++) {
+			if (hist->current == -1) {
+				hist->current = hist->count - 1;
+			} else if (hist->current > 0) {
+				hist->current--;
+			} else {
+				break;
+			}
+		}
+	} else {
+		/* Page Down - go forwards in history */
+		for (i = 0; i < step; i++) {
+			if (hist->current < hist->count - 1) {
+				hist->current++;
+			} else {
+				hist->current = -1;
+				break;
+			}
+		}
+	}
+}
+
+/* Get character from keyboard map with modifiers applied */
+static char get_char_with_modifiers(unsigned char keycode)
+{
+	char ch;
+	int use_shifted;
+	
+	/* Check current shift state */
+	use_shifted = is_shift_pressed();
+	
+	/* Get character from appropriate map */
+	if (use_shifted) {
+		ch = keyboard_map_shifted[keycode];
+	} else {
+		ch = keyboard_map[keycode];
+	}
+	
+	/* Apply caps lock to letters only */
+	if (caps_lock_on && ch >= 'a' && ch <= 'z') {
+		ch = ch - 'a' + 'A';  /* Convert to uppercase */
+	} else if (caps_lock_on && ch >= 'A' && ch <= 'Z') {
+		ch = ch - 'A' + 'a';  /* Convert to lowercase if shift is also pressed */
+	}
+	
+	return ch;
+}
+
 /* Handle keyboard input */
 void input_handle_keyboard(char keycode)
 {
+	unsigned char ukey = (unsigned char)keycode;
 	char *history_cmd;
+	char ch;
 	
-	/* Ignore key release events (keycode < 0 or >= 0x80) */
-	if (keycode < 0 || keycode >= 0x80) {
+	/* Handle escape byte (0xE0) for extended keys */
+	if (ukey == 0xE0) {
+		escape_state = 1;
+		return;
+	}
+	
+	/* Handle key release events (bit 7 set for standard keys) */
+	if (ukey >= 0x80) {
+		unsigned char release_code = ukey & 0x7F;
+		
+		/* Handle shift key release */
+		if (release_code == LEFT_SHIFT_KEY_CODE || release_code == RIGHT_SHIFT_KEY_CODE) {
+			shift_pressed = 0;
+		}
+		return;
+	}
+	
+	/* Handle shift key press */
+	if (keycode == LEFT_SHIFT_KEY_CODE || keycode == RIGHT_SHIFT_KEY_CODE) {
+		shift_pressed = 1;
+		return;
+	}
+	
+	/* Handle caps lock toggle */
+	if (keycode == CAPS_LOCK_KEY_CODE) {
+		caps_lock_on = !caps_lock_on;
 		return;
 	}
 	
@@ -218,13 +340,35 @@ void input_handle_keyboard(char keycode)
 	/* Handle Down Arrow - next command in history */
 	if (keycode == DOWN_ARROW_KEY_CODE) {
 		history_cmd = history_next(&global_history);
-		input_load_from_history(&global_input, history_cmd);
+		if (history_cmd) {
+			input_load_from_history(&global_input, history_cmd);
+		} else {
+			/* Clear input if at the end of history */
+			input_load_from_history(&global_input, 0);
+		}
+		return;
+	}
+	
+	/* Handle Page Up - jump to first (oldest) command */
+	if (keycode == PAGE_UP_KEY_CODE) {
+		if (global_history.count > 0) {
+			global_history.current = 0;
+			history_cmd = global_history.commands[0];
+			input_load_from_history(&global_input, history_cmd);
+		}
+		return;
+	}
+	
+	/* Handle Page Down - clear input field */
+	if (keycode == PAGE_DOWN_KEY_CODE) {
+		global_history.current = -1;
+		input_load_from_history(&global_input, 0);
 		return;
 	}
 	
 	/* Handle regular character input */
 	if (keycode < 128) {
-		char ch = keyboard_map[(unsigned char)keycode];
+		ch = get_char_with_modifiers((unsigned char)keycode);
 		/* Only accept printable ASCII */
 		if (ch >= 32 && ch <= 126) {
 			input_add_char(&global_input, ch);
@@ -240,6 +384,7 @@ void history_init(CommandHistory *hist)
 	hist->current = -1;
 	
 	for (i = 0; i < MAX_HISTORY; i++) {
+		hist->valid[i] = 1;
 		for (j = 0; j < MAX_INPUT_LENGTH; j++) {
 			hist->commands[i][j] = '\0';
 		}
@@ -247,7 +392,7 @@ void history_init(CommandHistory *hist)
 }
 
 /* Add command to history */
-void history_add(CommandHistory *hist, const char *command)
+void history_add(CommandHistory *hist, const char *command, int is_valid)
 {
 	/* Don't add empty commands */
 	if (command[0] == '\0') {
@@ -259,12 +404,14 @@ void history_add(CommandHistory *hist, const char *command)
 		int i;
 		for (i = 0; i < MAX_HISTORY - 1; i++) {
 			strcpy_custom(hist->commands[i], hist->commands[i + 1]);
+			hist->valid[i] = hist->valid[i + 1];
 		}
 		hist->count = MAX_HISTORY - 1;
 	}
 	
 	/* Add new command to end */
 	strcpy_custom(hist->commands[hist->count], command);
+	hist->valid[hist->count] = is_valid;
 	hist->count++;
 	hist->current = -1;  /* Reset position after adding new command */
 }
@@ -277,9 +424,14 @@ char* history_previous(CommandHistory *hist)
 	}
 	
 	if (hist->current == -1) {
+		/* Starting from current input, go to most recent history */
 		hist->current = hist->count - 1;
 	} else if (hist->current > 0) {
+		/* Go to older command */
 		hist->current--;
+	} else if (hist->current == 0) {
+		/* Already at oldest, stay there */
+		return hist->commands[0];
 	}
 	
 	return hist->commands[hist->current];
@@ -292,11 +444,22 @@ char* history_next(CommandHistory *hist)
 		return 0;
 	}
 	
-	if (hist->current < hist->count - 1) {
-		hist->current++;
-		return hist->commands[hist->current];
+	if (hist->current == -1) {
+		/* Already at the end (current input), stay there */
+		return 0;
 	}
 	
+	if (hist->current < hist->count - 1) {
+		/* Go to newer command */
+		hist->current++;
+		return hist->commands[hist->current];
+	} else {
+		/* At most recent history item, go back to current input */
+		hist->current = -1;
+		return 0;  /* Return null to clear input */
+	}
+	
+	/* Reached the newest command, clear input */
 	hist->current = -1;
 	return 0;
 }
