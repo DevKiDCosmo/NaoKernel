@@ -1,7 +1,5 @@
 #!/bin/bash
-
 set -e
-
 echo "Installing NaoKernel dependencies..."
 
 # Update package manager
@@ -18,9 +16,5 @@ apt-get install -y \
     gcc \
     g++
 
-apt-get install -y nasm qemu
-
-# Add project-specific dependencies here
-# apt-get install -y <package-name>
-
+apt-get install -y nasm qemu-system-i386
 echo "NaoKernel installation complete!"

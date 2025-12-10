@@ -13,6 +13,14 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: /usr/local
+          key: ${{ runner.os }}-deps-${{ hashFiles('install.sh') }}
+          restore-keys: |
+            ${{ runner.os }}-deps-
+      
       - name: Install dependencies
         run: sudo bash install.sh
       
