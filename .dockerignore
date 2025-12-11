@@ -1,0 +1,6 @@
+# Docker-spezifische Ignore-Regeln
+bin/
+*.o
+*.iso
+.git/
+.DS_Store
