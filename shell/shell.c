@@ -6,7 +6,7 @@
 #include "../input/input.h"
 #include "../output/output.h"
 #include "../essentials/types.h"
-#include "tokenize.h"
+#include "tokenizer.h"
 #include "../fs/fs.h"
 
 /* External global filesystem map from kernel */

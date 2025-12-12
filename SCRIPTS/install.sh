@@ -48,7 +48,9 @@ install_dependencies() {
         wget \
         make \
         gcc \
-        g++
+        g++ \
+        python3 \
+        python3-pip
     log_success "Build tools installed"
     
     # Install kernel-specific tools
