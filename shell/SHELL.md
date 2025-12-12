@@ -22,3 +22,5 @@ Change current phrasing to an tokenization thing. Just phrasing by word is not t
 
 
 Tab for autocompletition.
+
+Needs better shell syntax like `>`, `&` etc.

@@ -23,12 +23,15 @@ gcc -fno-stack-protector -m32 -c shell/shell.c -o bin/shell.o
 echo "Compiling kernel..."
 gcc -fno-stack-protector -m32 -c kernel.c -o bin/kc.o
 
+echo "Compiling FS subsystem..."
+gcc -fno-stack-protector -m32 -c fs/fs.c -o bin/fs.o
+
 # Link everything together
 echo "Linking kernel..."
-ld -m elf_i386 -T link.ld -o bin/kernel bin/kasm.o bin/kc.o bin/output.o bin/input.o bin/shell.o
-
+ld -m elf_i386 -T link.ld -o bin/kernel bin/kasm.o bin/kc.o bin/output.o bin/input.o bin/shell.o bin/fs.o
 # Run in QEMU if --run argument is provided
 if [[ "$1" == "--run" ]]; then
     echo "Starting NaoKernel..."
     qemu-system-i386 -kernel bin/kernel
 fi
+

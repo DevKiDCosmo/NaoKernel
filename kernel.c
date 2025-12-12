@@ -6,6 +6,7 @@
 #include "shell/shell.h"
 #include "output/output.h"
 #include "input/input.h"
+#include "fs/fs.h"
 
 /* there are 25 lines each of 80 columns; each element takes 2 bytes */
 #define LINES 25
@@ -131,6 +132,15 @@ void kmain(void)
 
 	idt_init();
 	kb_init();
+
+	/* Initialize Ram and Drives */
+
+	/* Initialize filesystems */
+	FilesystemMap fs_map;
+    fs_init(&fs_map);
+
+	/* Initialize Service for Shell instead making the shell part of the kernel. */
+	/* I need to think again.*/
 
 	/* Start shell */
 	nano_shell();
