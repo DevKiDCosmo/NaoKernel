@@ -34,6 +34,9 @@ unsigned int current_loc = 0;
 /* video memory begins at address 0xb8000 */
 char *vidptr = (char*)0xb8000;
 
+/* Global filesystem map for shell access */
+FilesystemMap global_fs_map;
+
 struct IDT_entry {
 	unsigned short int offset_lowerbits;
 	unsigned short int selector;
@@ -136,8 +139,7 @@ void kmain(void)
 	/* Initialize Ram and Drives */
 
 	/* Initialize filesystems */
-	FilesystemMap fs_map;
-    fs_init(&fs_map);
+    fs_init(&global_fs_map);
 
 	/* Initialize Service for Shell instead making the shell part of the kernel. */
 	/* I need to think again.*/

@@ -63,5 +63,6 @@ typedef struct {
 
 /* Functions */
 void fs_init(FilesystemMap *fs_map);
+void fs_list(FilesystemMap *fs_map);
 
 #endif /* FS_H */

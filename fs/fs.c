@@ -66,6 +66,25 @@ static void strcpy_local(char *dest, const char *src)
     *dest = '\0';
 }
 
+void fs_list(FilesystemMap *fs_map)
+{
+    int i;
+    kprint("Detected Drives:\n");
+    for (i = 0; i < fs_map->drive_count; i++) {
+        DriveInfo *drive = &fs_map->drives[i];
+        if (drive->present) {
+            kprint(" Drive ");
+            char drive_num_str[3];
+            drive_num_str[0] = '0' + drive->drive_number;
+            drive_num_str[1] = '\0';
+            kprint(drive_num_str);
+            kprint(": ");
+            kprint(drive->model);
+            kprint("\n");
+        }
+    }
+}
+
 /* Initialize filesystem and detect all drives */
 void fs_init(FilesystemMap *fs_map)
 {

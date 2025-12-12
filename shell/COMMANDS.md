@@ -33,6 +33,23 @@ Shuts down the kernel/system.
 
 **Usage:** `exit`
 
+### disk
+Manages disk drives and partitions.
+
+**Usage:** `disk <subcommand>`
+
+**Subcommands:**
+- `list` - Lists all detected drives
+- `mount` - Mounts a disk (not yet implemented)
+
+**Example:**
+```
+> disk list
+Listing disks...
+Detected Drives:
+ Drive 0: Primary Master
+```
+
 ## Command Line Features
 
 - **Line editing**: Type commands and use backspace to correct mistakes
