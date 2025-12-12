@@ -70,3 +70,17 @@ Manages screen output, cursor positioning, and text formatting functions for dis
 Provides a command-line interface with command parsing, execution, and extensibility for adding new commands.
 
 This modular design separates concerns and makes the codebase easier to understand and extend.
+
+
+# Execution
+
+## Without Disk
+
+```bash
+bash build.sh --run
+```
+
+## With Disk
+```bash 
+bash build.sh && bash run.sh --clear
+```

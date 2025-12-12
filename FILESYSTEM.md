@@ -1,4 +1,8 @@
 # Plan: Filesystem Implementation for NaoKernel
+# PLAN: Memory Allocation in RAM
+
+Add to shell command `disk list` to list all avaible disk
+For activating a disk or medium run `disk activate {device}`
 
 ## Executive Summary
 

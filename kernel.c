@@ -6,6 +6,7 @@
 #include "shell/shell.h"
 #include "output/output.h"
 #include "input/input.h"
+#include "fs/fs.h"
 
 /* there are 25 lines each of 80 columns; each element takes 2 bytes */
 #define LINES 25
@@ -32,6 +33,9 @@ extern void load_idt(unsigned long *idt_ptr);
 unsigned int current_loc = 0;
 /* video memory begins at address 0xb8000 */
 char *vidptr = (char*)0xb8000;
+
+/* Global filesystem map for shell access */
+FilesystemMap global_fs_map;
 
 struct IDT_entry {
 	unsigned short int offset_lowerbits;
@@ -131,6 +135,14 @@ void kmain(void)
 
 	idt_init();
 	kb_init();
+
+	/* Initialize Ram and Drives */
+
+	/* Initialize filesystems */
+    fs_init(&global_fs_map);
+
+	/* Initialize Service for Shell instead making the shell part of the kernel. */
+	/* I need to think again.*/
 
 	/* Start shell */
 	nano_shell();
