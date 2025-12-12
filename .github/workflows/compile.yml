@@ -25,7 +25,7 @@ jobs:
         run: sudo bash start.sh -i
       
       - name: Compile kernel without running
-        run:  bash start.sh -b
+        run:  bash start.sh -n
       
       - name: Upload kernel artifact
         uses: actions/upload-artifact@v4
