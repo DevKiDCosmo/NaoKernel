@@ -43,10 +43,18 @@ build_kernel() {
     log_build "Compiling kernel (kernel.c)..."
     gcc -fno-stack-protector -m32 -c kernel.c -o bin/kc.o
     log_success "Kernel compiled"
+
+    # Compile File System and Tokenizer (if any)
+    log_build "Compiling file system (fs/fs.c)..."
+    gcc -fno-stack-protector -m32 -c fs/fs.c -o bin/fs.o
+    log_success "File system compiled"
+    log_build "Compiling tokenizer (tokenizer/tokenizer.c)..."
+    gcc -fno-stack-protector -m32 -c shell/tokenizer.c -o bin/tokenizer.o
+    log_success "Tokenizer compiled"
     
     # Link everything together
     log_build "Linking kernel..."
-    ld -m elf_i386 -T link.ld -o bin/kernel bin/kasm.o bin/kc.o bin/output.o bin/input.o bin/shell.o
+    ld -m elf_i386 -T link.ld -o bin/kernel bin/kasm.o bin/kc.o bin/output.o bin/input.o bin/shell.o bin/fs.o bin/tokenizer.o
     log_success "Kernel linked successfully"
     
     log_success "Build complete! Kernel binary: bin/kernel"

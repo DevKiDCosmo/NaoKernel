@@ -3,9 +3,7 @@
 # NaoKernel Universal Start Script
 # Main entry point for building and running NaoKernel
 # ============================================================================
-
 set -e  # Exit on error
-
 # Load library
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/SCRIPTS/lib.sh"
@@ -141,6 +139,7 @@ OPTIONS:
     --install, -i       Install dependencies (Ubuntu/Debian only)
     --setup-drives      Setup disk and floppy images
     --docker-build      Force Docker build (Ubuntu compilation)
+    --native-build, -n  Force native build (direct compilation)
 
 EXAMPLES:
     $0 --build          Build the kernel
@@ -195,6 +194,9 @@ main() {
         --docker-build)
             action="docker_build"
             ;;
+        --native-build|-n)
+            action="native_build"
+            ;;
         "")
             action="build_and_run"
             ;;
@@ -246,6 +248,12 @@ main() {
             ;;
         docker_build)
             bash "$SCRIPT_DIR/SCRIPTS/docker-build.sh"
+            ;;
+        native_build)
+            log_step "Building kernel natively..."
+            check_dependencies
+            bash "$SCRIPT_DIR/SCRIPTS/build.sh"
+            log_success "Native build complete!"
             ;;
     esac
     

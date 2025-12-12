@@ -3,7 +3,7 @@
  * Supports quoted strings, escape sequences, and proper argument parsing
  */
 
-#include "tokenize.h"
+#include "tokenizer.h"
 #include "../essentials/types.h"
 
 /* Check if character is whitespace */
