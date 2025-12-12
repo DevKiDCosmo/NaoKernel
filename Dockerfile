@@ -30,4 +30,4 @@ RUN apt-get update && \
 COPY . .
 
 # Standard-Command: Build-Script ausführen
-CMD ["bash", "./docker/build.sh"]
+CMD ["bash", "SCRIPTS/build.sh"]
