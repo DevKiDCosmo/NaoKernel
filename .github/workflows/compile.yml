@@ -33,4 +33,5 @@ jobs:
           name: kernel-qemu
           path: |
             bin
+            kernel
           retention-days: 30
