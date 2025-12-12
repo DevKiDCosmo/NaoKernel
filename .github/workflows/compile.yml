@@ -30,8 +30,7 @@ jobs:
       - name: Upload kernel artifact
         uses: actions/upload-artifact@v4
         with:
-          name: kernel-qemu
+          name: kernel-binaries
           path: |
-            kernel
-            kernel.bin
+            bin
           retention-days: 30
