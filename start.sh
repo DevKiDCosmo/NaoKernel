@@ -236,7 +236,7 @@ run_kernel() {
     fi
     
     log_info "Starting NaoKernel..."
-    qemu-system-i386 -kernel bin/kernel
+    qemu-system-i386 -kernel bin/kernel -hda run/disk.img -fda run/floppy.img
 }
 
 # ============================================================================
