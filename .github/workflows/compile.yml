@@ -2,9 +2,9 @@ name: Compile Kernel
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, Filesystem ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, Filesystems ]
 
 jobs:
   build:
