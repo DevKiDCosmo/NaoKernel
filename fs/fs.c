@@ -66,6 +66,22 @@ static void strcpy_local(char *dest, const char *src)
     *dest = '\0';
 }
 
+/* Helper: print DL in hex (e.g., DL=0x80) */
+static void kprint_dl(unsigned char dl)
+{
+    static const char hex[] = "0123456789ABCDEF";
+    char buf[8]; /* "DL=0xHH" + NUL */
+    buf[0] = 'D';
+    buf[1] = 'L';
+    buf[2] = '=';
+    buf[3] = '0';
+    buf[4] = 'x';
+    buf[5] = hex[(dl >> 4) & 0xF];
+    buf[6] = hex[dl & 0xF];
+    buf[7] = '\0';
+    kprint(buf);
+}
+
 void fs_list(FilesystemMap *fs_map)
 {
     int i;
@@ -107,7 +123,9 @@ void fs_init(FilesystemMap *fs_map)
     
     /* Detect Primary Master (drive 0) */
     if (ide_detect_drive(IDE_PRIMARY_DATA, 0)) {
-        kprint("  [0] Primary Master: DETECTED\n");
+        kprint("  [0] Primary Master: DETECTED (");
+        kprint_dl(0x80);
+        kprint(")\n");
         fs_map->drives[0].present = 1;
         fs_map->drives[0].type = DRIVE_TYPE_ATA;
         strcpy_local(fs_map->drives[0].model, "Primary Master");
@@ -118,7 +136,9 @@ void fs_init(FilesystemMap *fs_map)
     
     /* Detect Primary Slave (drive 1) */
     if (ide_detect_drive(IDE_PRIMARY_DATA, 1)) {
-        kprint("  [1] Primary Slave: DETECTED\n");
+        kprint("  [1] Primary Slave: DETECTED (");
+        kprint_dl(0x81);
+        kprint(")\n");
         fs_map->drives[1].present = 1;
         fs_map->drives[1].type = DRIVE_TYPE_ATA;
         strcpy_local(fs_map->drives[1].model, "Primary Slave");
@@ -129,7 +149,9 @@ void fs_init(FilesystemMap *fs_map)
     
     /* Detect Secondary Master (drive 2) */
     if (ide_detect_drive(IDE_SECONDARY_DATA, 0)) {
-        kprint("  [2] Secondary Master: DETECTED\n");
+        kprint("  [2] Secondary Master: DETECTED (");
+        kprint_dl(0x82);
+        kprint(")\n");
         fs_map->drives[2].present = 1;
         fs_map->drives[2].type = DRIVE_TYPE_ATA;
         strcpy_local(fs_map->drives[2].model, "Secondary Master");
@@ -140,7 +162,9 @@ void fs_init(FilesystemMap *fs_map)
     
     /* Detect Secondary Slave (drive 3) */
     if (ide_detect_drive(IDE_SECONDARY_DATA, 1)) {
-        kprint("  [3] Secondary Slave: DETECTED\n");
+        kprint("  [3] Secondary Slave: DETECTED (");
+        kprint_dl(0x83);
+        kprint(")\n");
         fs_map->drives[3].present = 1;
         fs_map->drives[3].type = DRIVE_TYPE_ATA;
         strcpy_local(fs_map->drives[3].model, "Secondary Slave");
