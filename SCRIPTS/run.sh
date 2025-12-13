@@ -32,10 +32,11 @@ prepare_drives() {
     TMP_DIR=$(mktemp -d 2>/dev/null || mktemp -d -t naokernel_disk)
     log_info "Using temp dir: $TMP_DIR"
 
-    # Generate disk.sh and disk.dir (5 HDDs + 2 FDDs by default)
+    # Generate disk.sh and disk.dir (5 HDDs + 2 FDDs by default), pass lib.sh for logging
     (cd "$TMP_DIR" && "$PY_BIN" "$SCRIPT_DIR/disk.py" \
         10MBD 10MBD 8MBD 6MBD 3MBD \
-        2MBF 10MBF)
+        2MBF 10MBF \
+        --lib-path "$SCRIPT_DIR/lib.sh")
 
     log_info "Run the following command to generate disk.sh: $PY_BIN $SCRIPT_DIR/disk.py 10MBD 10MBD 8MBD 6MBD 3MBD 2MBF 10MBF"
 

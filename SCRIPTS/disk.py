@@ -18,7 +18,7 @@ def parse_drive_argument(arg):
     size, unit, drive_type = match.groups()
     return (int(size), drive_type.upper())
 
-def generate_run_script(output_file="disk.sh", drives=None, floppies=None):
+def generate_run_script(output_file="disk.sh", drives=None, floppies=None, lib_path=None):
     """
     Generate a disk.sh script that creates drives
     
@@ -33,18 +33,20 @@ def generate_run_script(output_file="disk.sh", drives=None, floppies=None):
         floppies = []
     
     script_content = "#!/bin/bash\n\n"
-    script_content += "# Auto-generated script to create virtual drives\n\n"
+    script_content += "# Auto-generated script to create virtual drives (uses lib.sh if provided)\n\n"
+    if lib_path:
+        script_content += f"source \"{lib_path}\"\n"
     
     for i, size_mb in enumerate(drives, 1):
         drive_name = f"drive_{i}"
-        script_content += f"echo 'Creating {drive_name} with size {size_mb}MB...'\n"
+        script_content += ("log_build 'Creating {drive} with size {size}MB...'\n" if lib_path else "echo 'Creating {drive} with size {size}MB...'\n").format(drive=drive_name, size=size_mb)
         script_content += f"dd if=/dev/zero of={drive_name}.img bs=1M count={size_mb}\n"
-        script_content += f"echo '{drive_name} created successfully'\n\n"
+        script_content += ("log_build '{drive} created successfully'\n\n" if lib_path else "echo '{drive} created successfully'\n\n").format(drive=drive_name)
     
     for i, size_mb in enumerate(floppies, 1):
-        script_content += f"echo 'Creating floppy_{i} with size {size_mb}MB...'\n"
+        script_content += ("log_build 'Creating floppy_{idx} with size {size}MB...'\n" if lib_path else "echo 'Creating floppy_{idx} with size {size}MB...'\n").format(idx=i, size=size_mb)
         script_content += f"dd if=/dev/zero of=floppy_{i}.img bs=1M count={size_mb}\n"
-        script_content += f"echo 'floppy_{i} created successfully'\n\n"
+        script_content += ("log_build 'floppy_{idx} created successfully'\n\n" if lib_path else "echo 'floppy_{idx} created successfully'\n\n").format(idx=i)
     
     with open(output_file, 'w') as f:
         f.write(script_content)
@@ -80,13 +82,15 @@ def generate_disk_dir(output_file="disk.dir", drives=None, floppies=None):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate a script to create virtual drives")
-    parser.add_argument("drives", nargs="*", type=parse_drive_argument, 
+    parser.add_argument("drives", nargs="*", type=parse_drive_argument,
                         help="Drives in format: 10MBD, 512MBD, etc.")
-    
+    parser.add_argument("--lib-path", dest="lib_path", default=None,
+                        help="Absolute path to SCRIPTS/lib.sh to source for logging")
+
     args = parser.parse_args()
-    
+
     drives = [size for size, dtype in args.drives if dtype == 'D']
     floppies = [size for size, dtype in args.drives if dtype == 'F']
-    
-    generate_run_script("disk.sh", drives, floppies)
+
+    generate_run_script("disk.sh", drives, floppies, lib_path=args.lib_path)
     generate_disk_dir("disk.dir", drives, floppies)
