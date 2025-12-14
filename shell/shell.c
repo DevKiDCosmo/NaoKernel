@@ -192,6 +192,65 @@ void cmd_disk(char *args)
 			kprint("\n");
 		}
 	}
+	else if (strncmp_case_insensitive(subcmd, "dismount", subcmd_len) == 0 && subcmd_len == 8)
+	{
+		char *device_args = skip_spaces(subcmd_end);
+		
+		if (device_args[0] == '\0')
+		{
+			kprint("Usage: disk dismount <device>\n");
+			kprint("Example: disk dismount ide0\n");
+			return;
+		}
+
+		/* Find the drive by ID */
+		int pos = -1;
+		if (strncmp_case_insensitive(device_args, "ide0", 4) == 0) {
+			pos = 0;
+		} else if (strncmp_case_insensitive(device_args, "ide1", 4) == 0) {
+			pos = 1;
+		} else if (strncmp_case_insensitive(device_args, "ide2", 4) == 0) {
+			pos = 2;
+		} else if (strncmp_case_insensitive(device_args, "ide3", 4) == 0) {
+			pos = 3;
+		} else {
+			kprint("Unknown device specified.\n");
+			return;
+		}
+
+		/* Find the mount index for this drive */
+		int mount_idx = -1;
+		int i;
+		for (i = 0; i < MAX_MOUNTS; i++) {
+			if (global_mount_table.mounts[i].is_mounted &&
+				global_mount_table.mounts[i].drive == &global_fs_map.drives[pos]) {
+				mount_idx = i;
+				break;
+			}
+		}
+
+		if (mount_idx == -1) {
+			kprint("Drive is not mounted.\n");
+			return;
+		}
+
+		kprint("Dismounting ");
+		kprint(device_args);
+		kprint("...\n");
+
+		MountResult result = unmount_drive(&global_mount_table, mount_idx);
+		if (result == MOUNT_SUCCESS) {
+			kprint("Dismount successful!\n");
+			
+			/* Update prompt to reflect current drive or default */
+			const char *new_prompt = get_current_prompt(&global_mount_table);
+			input_set_prompt(&input, (char *)new_prompt);
+		} else {
+			kprint("Dismount failed: ");
+			kprint(get_mount_result_string(result));
+			kprint("\n");
+		}
+	}
 	else if (strncmp_case_insensitive(subcmd, "format", subcmd_len) == 0 && subcmd_len == 6) {
 		kprint("Formatting disk...\n");
 
@@ -247,7 +306,7 @@ void cmd_disk(char *args)
 	}
 	else
 	{
-		kprint("Unknown disk command. Use 'list' or 'mount' or 'format'.\n");
+		kprint("Unknown disk command. Use 'list', 'mount', 'dismount', or 'format'.\n");
 	}
 	return;
 }
@@ -342,7 +401,7 @@ static Command command_map[] = {
 	{"exit", (void *)cmd_exit, 0, 0, "Shutdown the system"},
 	{"test", (void *)cmd_test, 0, 0, "Run a test command"},
 	{"history", (void *)cmd_history, 0, 0, "Show command history"},
-	{"disk", (void *)cmd_disk, 1, 0, "Disk operations (list, mount, format)"},
+	{"disk", (void *)cmd_disk, 1, 0, "Disk operations (list, mount, dismount, format)"},
 	{"switch", (void *)cmd_switch, 1, 0, "Switch to mounted drive"},
 	{0, 0, 0, 0, 0}									  /* Sentinel entry */
 };
