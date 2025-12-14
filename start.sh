@@ -144,8 +144,7 @@ OPTIONS:
     --docker-build, -d  Force Docker build (Ubuntu compilation)
     --native-build, -n  Force native build (direct compilation)
 
-    Not implemented --runtemp --force-build, -t -f, -tf Force Normal Build with Run Temp
-    Not implemented --run --force-build, -r -f, -rf Force Build with Run
+    --force-build, -f   Force rebuild even if kernel exists (with run and runtemp)
 
 EXAMPLES:
     $0 --build          Build the kernel
@@ -176,6 +175,15 @@ main() {
     
     # Parse arguments
     local action="build_and_run"
+    local force_build=false
+    
+    # Check for force build flag in all arguments
+    for arg in "$@"; do
+        if [[ "$arg" == "-f" || "$arg" == "--force-build" ]]; then
+            force_build=true
+            break
+        fi
+    done
     
     case "${1:-}" in
         --help|-h)
@@ -226,16 +234,24 @@ main() {
             build_kernel
             ;;
         run)
-            if [[ ! -f "bin/kernel" ]]; then
-                log_warning "Kernel not built yet. Building first..."
+            if [[ ! -f "bin/kernel" ]] || [[ "$force_build" == true ]]; then
+                if [[ "$force_build" == true ]]; then
+                    log_info "Force rebuild requested..."
+                else
+                    log_warning "Kernel not built yet. Building first..."
+                fi
                 check_dependencies
                 build_kernel
             fi
             run_kernel
             ;;
         run_temp)
-            if [[ ! -f "bin/kernel" ]]; then
-                log_warning "Kernel not built yet. Building first..."
+            if [[ ! -f "bin/kernel" ]] || [[ "$force_build" == true ]]; then
+                if [[ "$force_build" == true ]]; then
+                    log_info "Force rebuild requested..."
+                else
+                    log_warning "Kernel not built yet. Building first..."
+                fi
                 check_dependencies
                 build_kernel
             fi
