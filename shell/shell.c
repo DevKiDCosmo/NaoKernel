@@ -194,48 +194,17 @@ void cmd_disk(char *args)
 	}
 	else if (strncmp_case_insensitive(subcmd, "dismount", subcmd_len) == 0 && subcmd_len == 8)
 	{
-		char *device_args = skip_spaces(subcmd_end);
-		
-		if (device_args[0] == '\0')
-		{
-			kprint("Usage: disk dismount <device>\n");
-			kprint("Example: disk dismount ide0\n");
+		/* Dismount the currently active drive */
+		if (global_mount_table.current_mount == -1) {
+			kprint("No drive is currently mounted.\n");
 			return;
 		}
 
-		/* Find the drive by ID */
-		int pos = -1;
-		if (strncmp_case_insensitive(device_args, "ide0", 4) == 0) {
-			pos = 0;
-		} else if (strncmp_case_insensitive(device_args, "ide1", 4) == 0) {
-			pos = 1;
-		} else if (strncmp_case_insensitive(device_args, "ide2", 4) == 0) {
-			pos = 2;
-		} else if (strncmp_case_insensitive(device_args, "ide3", 4) == 0) {
-			pos = 3;
-		} else {
-			kprint("Unknown device specified.\n");
-			return;
-		}
-
-		/* Find the mount index for this drive */
-		int mount_idx = -1;
-		int i;
-		for (i = 0; i < MAX_MOUNTS; i++) {
-			if (global_mount_table.mounts[i].is_mounted &&
-				global_mount_table.mounts[i].drive == &global_fs_map.drives[pos]) {
-				mount_idx = i;
-				break;
-			}
-		}
-
-		if (mount_idx == -1) {
-			kprint("Drive is not mounted.\n");
-			return;
-		}
+		int mount_idx = global_mount_table.current_mount;
+		const char *drive_name = global_mount_table.mounts[mount_idx].mount_point;
 
 		kprint("Dismounting ");
-		kprint(device_args);
+		kprint(drive_name);
 		kprint("...\n");
 
 		MountResult result = unmount_drive(&global_mount_table, mount_idx);
