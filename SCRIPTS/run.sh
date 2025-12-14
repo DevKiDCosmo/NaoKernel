@@ -34,12 +34,11 @@ prepare_drives() {
 
     # Generate disk.sh and disk.dir (5 HDDs + 2 FDDs by default), pass lib.sh for logging
     (cd "$TMP_DIR" && "$PY_BIN" "$SCRIPT_DIR/disk.py" \
-        1024MBD 10MBD 10MBD 8MBD 6MBD 3MBD \
-        2MBF 10MBF 349MBF 239MBF \
+        1024MBD 512MBD  \
+        1MBF 10MBF \
         --lib-path "$SCRIPT_DIR/lib.sh")
 
-    log_info "Run the following command to generate disk.sh: $PY_BIN $SCRIPT_DIR/disk.py 1024MBD 10MBD 10MBD 8MBD 6MBD 3MBD 2MBF 10MBF 349MBF 239MBF"
-
+    log_info "Run the following command to generate disk.sh: $PY_BIN $SCRIPT_DIR/disk.py 1024MBD 512MBD 10MBD 8MBD 6MBD 3MBD 2MBF 10MBF 349MBF 239MBF"
     # Run the generated script to create the images
     (cd "$TMP_DIR" && bash disk.sh)
 
@@ -94,24 +93,20 @@ run_kernel() {
             continue
         fi
 
-        if [[ "$drive_type" == "D" ]]; then
-            if (( hd_index < ${#hd_letters[@]} )); then
-                local letter=${hd_letters[$hd_index]}
+        if [[ "$drive_type" == "D" || "$drive_type" == "F" ]]; then
+            # Mount both HDD and FDD as IDE drives for simpler detection
+            if (( hd_index < 4 )); then
+                local letter=${hd_letters[$hd_index]:-$hd_index}
                 qemu_cmd+=("-drive" "file=run/$drive_file,format=raw,if=ide,index=$hd_index")
-                log_info "Attaching HDD $letter (ide index $hd_index): run/$drive_file"
+                if [[ "$drive_type" == "D" ]]; then
+                    log_info "Attaching HDD $letter (ide index $hd_index): run/$drive_file"
+                else
+                    log_info "Attaching FDD as IDE (ide index $hd_index): run/$drive_file"
+                fi
+                ((hd_index++))
             else
-                log_warning "IDE supports only 4 HDD slots (hda-hdd). Skipping run/$drive_file"
+                log_warning "IDE supports only 4 drive slots. Skipping run/$drive_file"
             fi
-            ((hd_index++))
-        elif [[ "$drive_type" == "F" ]]; then
-            if (( fd_index < ${#fd_letters[@]} )); then
-                local letter=${fd_letters[$fd_index]}
-                qemu_cmd+=("-drive" "file=run/$drive_file,format=raw,if=floppy,index=$fd_index")
-                log_info "Attaching FDD $letter: run/$drive_file"
-            else
-                log_warning "PC floppy controller supports only 2 drives (fda-fdb). Skipping run/$drive_file"
-            fi
-            ((fd_index++))
         else
             log_warning "Unknown drive type: $drive_type"
         fi

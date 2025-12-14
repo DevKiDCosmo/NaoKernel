@@ -81,15 +81,20 @@ static int ata_identify(unsigned short base_port, int is_slave, unsigned int *to
         data[i] = inw(base_port + 0);
     }
 
-    /* Total LBA28 sectors are in words 60-61 */
+    /* Total LBA28 sectors are in words 60-61 
+     * ATA spec: Words are 16-bit little-endian, 32-bit value is formed from two words
+     * Word 60 = bits 0-15, Word 61 = bits 16-31
+     */
     unsigned int lba28 = ((unsigned int)data[61] << 16) | (unsigned int)data[60];
     if (lba28 > 0) {
         *total_sectors = lba28;
         return 1;
     }
 
-    /* If LBA28 is zero, try LBA48 in words 100-103 (lower 32 bits for simplicity) */
-    unsigned int lba48_low = ((unsigned int)data[103] << 16) | (unsigned int)data[102];
+    /* If LBA28 is zero, try LBA48 in words 100-103 (lower 32 bits for simplicity) 
+     * Word 100 = bits 0-15, Word 101 = bits 16-31
+     */
+    unsigned int lba48_low = ((unsigned int)data[101] << 16) | (unsigned int)data[100];
     if (lba48_low > 0) {
         *total_sectors = lba48_low; /* Note: truncated if >4GiB sectors */
         return 1;

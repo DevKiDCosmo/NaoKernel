@@ -8,14 +8,14 @@ extern void kprint(const char *str);
 extern void kprint_newline(void);
 
 /* External assembly port I/O functions */
-extern unsigned char read_port(unsigned short port);
+extern char read_port(unsigned short port);
 extern void write_port(unsigned short port, unsigned char data);
 extern unsigned short read_word_port(unsigned short port);
 
 /* Port I/O wrappers */
 static unsigned char inb(unsigned short port)
 {
-    return read_port(port);
+    return (unsigned char)read_port(port);
 }
 
 static void outb(unsigned short port, unsigned char data)
@@ -171,11 +171,28 @@ MountResult mount_drive(MountTable *table, DriveInfo *drive)
         return MOUNT_ERROR_NOT_FORMATTED;
     }
     
-    /* Check if already mounted */
+    /* Check if this specific drive is already mounted */
     for (i = 0; i < MAX_MOUNTS; i++) {
         if (table->mounts[i].is_mounted && 
             table->mounts[i].drive == drive) {
-            return MOUNT_ERROR_ALREADY_MOUNTED;
+            /* Drive already mounted, no need to mount again */
+            return MOUNT_SUCCESS;
+        }
+    }
+    
+    /* Automatically unmount all previously mounted drives */
+    for (i = 0; i < MAX_MOUNTS; i++) {
+        if (table->mounts[i].is_mounted) {
+            kprint("Automount: Dismounting ");
+            kprint(table->mounts[i].mount_point);
+            kprint("...\n");
+            
+            MountResult result = unmount_drive(table, i);
+            if (result != MOUNT_SUCCESS) {
+                kprint("  Warning: Dismount failed for ");
+                kprint(table->mounts[i].mount_point);
+                kprint("\n");
+            }
         }
     }
     
@@ -186,10 +203,14 @@ MountResult mount_drive(MountTable *table, DriveInfo *drive)
             table->mounts[i].is_mounted = 1;
             strcpy_local(table->mounts[i].mount_point, drive->idNAME);
             
-            /* Set as current if no current mount */
-            if (table->current_mount == -1) {
-                table->current_mount = i;
-            }
+            /* Set as current mount */
+            table->current_mount = i;
+            
+            kprint("Automount: Successfully mounted ");
+            kprint(drive->idNAME);
+            kprint(" (");
+            kprint(drive->model);
+            kprint(")\n");
             
             return MOUNT_SUCCESS;
         }
