@@ -7,22 +7,25 @@
 extern void kprint(const char *str);
 extern void kprint_newline(void);
 
-/* Port I/O */
+/* External assembly port I/O functions */
+extern unsigned char read_port(unsigned short port);
+extern void write_port(unsigned short port, unsigned char data);
+extern void write_word_port(unsigned short port, unsigned short data);
+
+/* Port I/O wrappers */
 static unsigned char inb(unsigned short port)
 {
-    unsigned char result;
-    __asm__ volatile ("inb %1, %0" : "=a" (result) : "Nd" (port));
-    return result;
+    return read_port(port);
 }
 
 static void outb(unsigned short port, unsigned char data)
 {
-    __asm__ volatile ("outb %0, %1" : : "a" (data), "Nd" (port));
+    write_port(port, data);
 }
 
 static void outw(unsigned short port, unsigned short data)
 {
-    __asm__ volatile ("outw %0, %1" : : "a" (data), "Nd" (port));
+    write_word_port(port, data);
 }
 
 /* Simple string operations */

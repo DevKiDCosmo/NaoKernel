@@ -7,6 +7,7 @@
 #include "output/output.h"
 #include "input/input.h"
 #include "fs/fs.h"
+#include "fs/mount/mount.h"
 
 /* there are 25 lines each of 80 columns; each element takes 2 bytes */
 #define LINES 25
@@ -38,6 +39,8 @@ char *vidptr = (char*)0xb8000;
 
 /* Global filesystem map for shell access */
 FilesystemMap global_fs_map;
+/* Global mount table */
+MountTable global_mount_table;
 
 struct IDT_entry {
 	unsigned short int offset_lowerbits;
@@ -208,6 +211,9 @@ void kmain(void)
 
 	/* Initialize filesystems */
     fs_init(&global_fs_map);
+	
+	/* Initialize mount table */
+	mount_init(&global_mount_table);
 
 	/* Initialize Service for Shell instead making the shell part of the kernel. */
 	/* I need to think again.*/

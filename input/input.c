@@ -110,6 +110,12 @@ void input_print_prompt(InputBuffer *inp)
 	}
 }
 
+/* Set prompt dynamically */
+void input_set_prompt(InputBuffer *inp, char *prompt)
+{
+	inp->prompt = prompt;
+}
+
 /* Set the command history for input system */
 void input_set_history(CommandHistory *hist)
 {
