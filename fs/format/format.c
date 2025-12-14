@@ -533,10 +533,10 @@ const char* get_format_result_string(FormatResult result)
 {
     switch (result) {
         case FORMAT_SUCCESS: return "Success";
-        case FORMAT_ERROR_INVALID_DRIVE: return "Invalid drive";
-        case FORMAT_ERROR_WRITE_FAILED: return "Write failed";
-        case FORMAT_ERROR_UNSUPPORTED: return "Unsupported media";
-        case FORMAT_ERROR_TOO_LARGE: return "Drive too large";
-        default: return "Unknown error";
+        case FORMAT_ERROR_INVALID_DRIVE: return "Invalid drive\n";
+        case FORMAT_ERROR_WRITE_FAILED: return "Write failed\n";
+        case FORMAT_ERROR_UNSUPPORTED: return "Unsupported media\n";
+        case FORMAT_ERROR_TOO_LARGE: return "Drive too large\n";
+        default: return "Unknown error\n";
     }
 }
