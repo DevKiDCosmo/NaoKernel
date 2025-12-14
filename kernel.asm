@@ -13,6 +13,8 @@ global start
 global keyboard_handler
 global read_port
 global write_port
+global read_word_port
+global write_word_port
 global load_idt
 
 extern kmain 		;this is defined in the c file
@@ -28,6 +30,18 @@ write_port:
 	mov   edx, [esp + 4]    
 	mov   al, [esp + 4 + 4]  
 	out   dx, al  
+	ret
+
+read_word_port:
+	mov edx, [esp + 4]
+			;ax is the lower 16 bits of eax
+	in ax, dx	;dx is the lower 16 bits of edx
+	ret
+
+write_word_port:
+	mov   edx, [esp + 4]    
+	mov   ax, [esp + 4 + 4]  
+	out   dx, ax  
 	ret
 
 load_idt:

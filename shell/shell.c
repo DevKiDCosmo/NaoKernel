@@ -9,9 +9,11 @@
 #include "tokenizer.h"
 #include "../fs/fs.h"
 #include "../fs/format/format.h"
+#include "../fs/mount/mount.h"
 
 /* External global filesystem map from kernel */
 extern FilesystemMap global_fs_map;
+extern MountTable global_mount_table;
 
 /* Shell state */
 static InputBuffer input;
@@ -123,16 +125,99 @@ void cmd_disk(char *args)
 	}
 	else if (strncmp_case_insensitive(subcmd, "mount", subcmd_len) == 0 && subcmd_len == 5)
 	{
-		kprint("Mounting disk...\n");
-		/* TODO: Implement disk mounting */
-
-		/* Get additional arguments */
 		char *device_args = skip_spaces(subcmd_end);
-		if (device_args[0] != '\0')
+		
+		if (device_args[0] == '\0')
 		{
-			kprint("  Device: ");
-			kprint(device_args);
-			kprint_newline();
+			kprint("Usage: disk mount <device>\n");
+			kprint("Example: disk mount ide0\n");
+			return;
+		}
+
+		/* Find the drive by ID */
+		int pos = -1;
+		if (strncmp_case_insensitive(device_args, "ide0", 4) == 0) {
+			pos = 0;
+		} else if (strncmp_case_insensitive(device_args, "ide1", 4) == 0) {
+			pos = 1;
+		} else if (strncmp_case_insensitive(device_args, "ide2", 4) == 0) {
+			pos = 2;
+		} else if (strncmp_case_insensitive(device_args, "ide3", 4) == 0) {
+			pos = 3;
+		} else {
+			kprint("Unknown device specified.\n");
+			return;
+		}
+
+		DriveInfo *drive = &global_fs_map.drives[pos];
+		
+		if (!drive->present) {
+			kprint("Drive not present.\n");
+			return;
+		}
+
+		kprint("Mounting ");
+		kprint(drive->idNAME);
+		kprint("...\n");
+
+		/* Check if formatted first */
+		if (!is_drive_formatted(drive)) {
+			kprint("Error: Drive is not formatted.\n");
+			kprint("Use 'disk format ");
+			kprint(drive->idNAME);
+			kprint(" <fs_type>' to format it first.\n");
+			return;
+		}
+
+		/* Display detected filesystem */
+		kprint("  Filesystem: ");
+		switch (drive->fs_type) {
+			case FS_TYPE_FAT12: kprint("FAT12"); break;
+			case FS_TYPE_FAT16: kprint("FAT16"); break;
+			case FS_TYPE_FAT32: kprint("FAT32"); break;
+			default: kprint("Unknown"); break;
+		}
+		kprint("\n");
+
+		MountResult result = mount_drive(&global_mount_table, drive);
+		if (result == MOUNT_SUCCESS) {
+			kprint("Mount successful!\n");
+			
+			/* Update the prompt for current drive */
+			const char *new_prompt = get_current_prompt(&global_mount_table);
+			input_set_prompt(&input, (char *)new_prompt);
+		} else {
+			kprint("Mount failed: ");
+			kprint(get_mount_result_string(result));
+			kprint("\n");
+		}
+	}
+	else if (strncmp_case_insensitive(subcmd, "dismount", subcmd_len) == 0 && subcmd_len == 8)
+	{
+		/* Dismount the currently active drive */
+		if (global_mount_table.current_mount == -1) {
+			kprint("No drive is currently mounted.\n");
+			return;
+		}
+
+		int mount_idx = global_mount_table.current_mount;
+		const char *drive_name = global_mount_table.mounts[mount_idx].mount_point;
+
+		kprint("Dismounting ");
+		kprint(drive_name);
+		kprint("...\n");
+
+		MountResult result = unmount_drive(&global_mount_table, mount_idx);
+		if (result == MOUNT_SUCCESS) {
+			kprint("Dismount successful!\n");
+			
+			/* Update prompt to reflect current drive or default */
+			const char *new_prompt = get_current_prompt(&global_mount_table);
+			input_set_prompt(&input, (char *)new_prompt);
+		} else {
+			kprint("Dismount failed: ");
+			kprint(get_mount_result_string(result));
+			kprint("\n");
 		}
 	}
 	else if (strncmp_case_insensitive(subcmd, "format", subcmd_len) == 0 && subcmd_len == 6) {
@@ -190,7 +275,7 @@ void cmd_disk(char *args)
 	}
 	else
 	{
-		kprint("Unknown disk command. Use 'list' or 'mount' or 'format'.\n");
+		kprint("Unknown disk command. Use 'list', 'mount', 'dismount', or 'format'.\n");
 	}
 	return;
 }
@@ -249,6 +334,33 @@ void cmd_history(void)
 	}
 }
 
+void cmd_switch(char *args)
+{
+	char *drive_id = skip_spaces(args);
+	
+	if (drive_id[0] == '\0')
+	{
+		kprint("Usage: switch <drive>\n");
+		kprint("Example: switch ide0\n");
+		return;
+	}
+	
+	if (set_current_drive(&global_mount_table, drive_id))
+	{
+		kprint("Switched to ");
+		kprint(drive_id);
+		kprint("\n");
+		
+		/* Update prompt */
+		const char *new_prompt = get_current_prompt(&global_mount_table);
+		input_set_prompt(&input, (char *)new_prompt);
+	}
+	else
+	{
+		kprint("Drive not mounted or not found.\n");
+	}
+}
+
 /* Command map - array of all available commands */
 static Command command_map[] = {
 	{"help", (void *)cmd_help, 0, 0, "Show available commands"},
@@ -258,7 +370,8 @@ static Command command_map[] = {
 	{"exit", (void *)cmd_exit, 0, 0, "Shutdown the system"},
 	{"test", (void *)cmd_test, 0, 0, "Run a test command"},
 	{"history", (void *)cmd_history, 0, 0, "Show command history"},
-	{"disk", (void *)cmd_disk, 1, 0, "Disk operations (list, mount)"},
+	{"disk", (void *)cmd_disk, 1, 0, "Disk operations (list, mount, dismount, format)"},
+	{"switch", (void *)cmd_switch, 1, 0, "Switch to mounted drive"},
 	{0, 0, 0, 0, 0}									  /* Sentinel entry */
 };
 

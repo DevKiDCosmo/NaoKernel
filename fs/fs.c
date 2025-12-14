@@ -6,25 +6,26 @@
 extern void kprint(const char *str);
 extern void kprint_newline(void);
 
-/* Port I/O using inline assembly */
+/* External assembly port I/O functions */
+extern unsigned char read_port(unsigned short port);
+extern void write_port(unsigned short port, unsigned char data);
+extern unsigned short read_word_port(unsigned short port);
+
+/* Port I/O wrappers */
 static unsigned char inb(unsigned short port)
 {
-    unsigned char result;
-    __asm__ volatile ("inb %1, %0" : "=a" (result) : "Nd" (port));
-    return result;
+    return read_port(port);
 }
 
 static void outb(unsigned short port, unsigned char data)
 {
-    __asm__ volatile ("outb %0, %1" : : "a" (data), "Nd" (port));
+    write_port(port, data);
 }
 
 /* Read 16-bit from port */
 static unsigned short inw(unsigned short port)
 {
-    unsigned short result;
-    __asm__ volatile ("inw %1, %0" : "=a" (result) : "Nd" (port));
-    return result;
+    return read_word_port(port);
 }
 
 /* Helper: Wait for drive to be ready */
@@ -80,15 +81,20 @@ static int ata_identify(unsigned short base_port, int is_slave, unsigned int *to
         data[i] = inw(base_port + 0);
     }
 
-    /* Total LBA28 sectors are in words 60-61 */
+    /* Total LBA28 sectors are in words 60-61 
+     * ATA spec: Words are 16-bit little-endian, 32-bit value is formed from two words
+     * Word 60 = bits 0-15, Word 61 = bits 16-31
+     */
     unsigned int lba28 = ((unsigned int)data[61] << 16) | (unsigned int)data[60];
     if (lba28 > 0) {
         *total_sectors = lba28;
         return 1;
     }
 
-    /* If LBA28 is zero, try LBA48 in words 100-103 (lower 32 bits for simplicity) */
-    unsigned int lba48_low = ((unsigned int)data[103] << 16) | (unsigned int)data[102];
+    /* If LBA28 is zero, try LBA48 in words 100-103 (lower 32 bits for simplicity) 
+     * Word 100 = bits 0-15, Word 101 = bits 16-31
+     */
+    unsigned int lba48_low = ((unsigned int)data[101] << 16) | (unsigned int)data[100];
     if (lba48_low > 0) {
         *total_sectors = lba48_low; /* Note: truncated if >4GiB sectors */
         return 1;
@@ -149,6 +155,9 @@ static void kprint_dl(unsigned char dl)
 void fs_list(FilesystemMap *fs_map)
 {
     int i;
+    /* Forward declaration for formatted check */
+    extern int is_drive_formatted(DriveInfo *drive);
+    
     kprint("Detected Drives:\n");
     for (i = 0; i < fs_map->drive_count; i++) {
         DriveInfo *drive = &fs_map->drives[i];
@@ -186,6 +195,22 @@ void fs_list(FilesystemMap *fs_map)
                 buf[idx] = '\0';
                 kprint(buf);
             }
+            
+            /* Check if formatted */
+            kprint("  [");
+            if (is_drive_formatted(drive)) {
+                kprint("Formatted: ");
+                switch (drive->fs_type) {
+                    case FS_TYPE_FAT12: kprint("FAT12"); break;
+                    case FS_TYPE_FAT16: kprint("FAT16"); break;
+                    case FS_TYPE_FAT32: kprint("FAT32"); break;
+                    default: kprint("Unknown"); break;
+                }
+            } else {
+                kprint("Not formatted");
+            }
+            kprint("]");
+            
             kprint("\n");
         }
     }

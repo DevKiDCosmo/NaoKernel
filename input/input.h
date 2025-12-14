@@ -44,6 +44,7 @@ void* memcpy_custom(void *dest, const void *src, int n);
 void input_init(InputBuffer *inp, char *prompt);
 void input_reset(InputBuffer *inp);
 void input_print_prompt(InputBuffer *inp);
+void input_set_prompt(InputBuffer *inp, char *prompt);
 char* input_getline(InputBuffer *inp);
 void input_add_char(InputBuffer *inp, char c);
 void input_backspace(InputBuffer *inp);
