@@ -101,33 +101,35 @@ void cmd_test(void)
 
 void cmd_disk(char *args)
 {
-	/* This command now uses tokenization for proper parsing */
-	TokenArray tokens;
-	tokenize(args, &tokens);
-
-	if (tokens.count == 0)
+	/* Skip leading spaces */
+	char *subcmd = skip_spaces(args);
+	
+	/* Empty command */
+	if (subcmd[0] == '\0')
 	{
 		kprint("Usage: disk <list|mount>\n");
 		return;
 	}
 
-	const char *subcmd = tokens.tokens[0];
+	/* Find end of subcommand */
+	char *subcmd_end = find_space(subcmd);
+	int subcmd_len = subcmd_end - subcmd;
 
-	if (strncmp_case_insensitive(subcmd, "list", 4) == 0 && strlen_custom(subcmd) == 4)
+	if (strncmp_case_insensitive(subcmd, "list", subcmd_len) == 0 && subcmd_len == 4)
 	{
-		kprint("Listing disks...\n");
-
+		fs_list(&global_fs_map);
 	}
-	else if (strncmp_case_insensitive(subcmd, "mount", 5) == 0 && strlen_custom(subcmd) == 5)
+	else if (strncmp_case_insensitive(subcmd, "mount", subcmd_len) == 0 && subcmd_len == 5)
 	{
 		kprint("Mounting disk...\n");
 		/* TODO: Implement disk mounting */
 
-		/* Example: access additional arguments if needed */
-		if (tokens.count > 1)
+		/* Get additional arguments */
+		char *device_args = skip_spaces(subcmd_end);
+		if (device_args[0] != '\0')
 		{
 			kprint("  Device: ");
-			kprint(tokens.tokens[1]);
+			kprint(device_args);
 			kprint_newline();
 		}
 	}
@@ -201,7 +203,7 @@ static Command command_map[] = {
 	{"exit", (void *)cmd_exit, 0, 0, "Shutdown the system"},
 	{"test", (void *)cmd_test, 0, 0, "Run a test command"},
 	{"history", (void *)cmd_history, 0, 0, "Show command history"},
-	{"disk", (void *)cmd_disk, 1, 1, "Disk Command"}, /* Uses tokenization */
+	{"disk", (void *)cmd_disk, 1, 0, "Disk operations (list, mount)"},
 	{0, 0, 0, 0, 0}									  /* Sentinel entry */
 };
 
