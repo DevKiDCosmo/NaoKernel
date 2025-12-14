@@ -23,6 +23,8 @@
 #define ENTER_KEY_CODE 0x1C
 #define SIGUSR1 10
 
+#define MOUNTED 0 // If 1 filesystem is mounted and file operations can be performed
+
 extern unsigned char keyboard_map[128];
 extern void keyboard_handler(void);
 extern char read_port(unsigned short port);
@@ -47,6 +49,59 @@ struct IDT_entry {
 
 struct IDT_entry IDT[IDT_SIZE];
 
+
+static const char* get_cpu_arch(void)
+{
+#if defined(__x86_64__) || defined(_M_X64)
+	return "x86_64";
+#elif defined(__i386__) || defined(_M_IX86)
+	return "x86";
+#elif defined(__aarch64__)
+	return "aarch64";
+#elif defined(__arm__) || defined(_M_ARM)
+	return "arm";
+#elif defined(__riscv)
+	return "riscv";
+#elif defined(__mips__)
+	return "mips";
+#elif defined(__powerpc64__)
+	return "ppc64";
+#elif defined(__powerpc__)
+	return "ppc";
+#elif defined(__sparc__)
+	return "sparc";
+#else
+	return "unknown";
+#endif
+}
+
+#if defined(__i386__) || defined(__x86_64__) || defined(_M_IX86) || defined(_M_X64)
+static void get_x86_vendor(char vendor[13])
+{
+	unsigned int eax, ebx, ecx, edx;
+	eax = 0;
+	/* cpuid with eax=0 returns vendor ID string in ebx, edx, ecx */
+#if defined(__GNUC__)
+	__asm__ __volatile__ (
+		"cpuid"
+		: "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx)
+		: "a"(0)
+	);
+#elif defined(_MSC_VER)
+	int regs[4];
+	__cpuid(regs, 0);
+	ebx = (unsigned)regs[1];
+	edx = (unsigned)regs[3];
+	ecx = (unsigned)regs[2];
+#else
+	ebx = ecx = edx = 0;
+#endif
+	((unsigned int*)vendor)[0] = ebx;
+	((unsigned int*)vendor)[1] = edx;
+	((unsigned int*)vendor)[2] = ecx;
+	vendor[12] = '\0';
+}
+#endif
 
 void idt_init(void)
 {
@@ -132,6 +187,19 @@ void kmain(void)
 	clear_screen();
 	kprint("NaoKernel - Initializing...");
 	kprint_newline();
+
+	/* Basic CPU architecture report */
+	kprint("CPU Architecture: ");
+	kprint(get_cpu_arch());
+	kprint_newline();
+
+#if defined(__i386__) || defined(__x86_64__) || defined(_M_IX86) || defined(_M_X64)
+	char vendor[13];
+	get_x86_vendor(vendor);
+	kprint("CPU Vendor: ");
+	kprint(vendor);
+	kprint_newline();
+#endif
 
 	idt_init();
 	kb_init();

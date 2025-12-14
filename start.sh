@@ -257,7 +257,6 @@ main() {
             ;;
     esac
     
-    log_success ""
     log_success "Operation complete!"
 }
 

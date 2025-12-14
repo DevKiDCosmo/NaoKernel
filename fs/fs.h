@@ -52,6 +52,7 @@ typedef struct {
     unsigned int size_mb;
     char model[41];         /* 40 chars + null terminator */
     int present;
+    char idNAME[16];   /* Identifier name for mounting and device identification */
 } DriveInfo;
 
 /* Filesystem Map */

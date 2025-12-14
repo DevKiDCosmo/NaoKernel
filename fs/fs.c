@@ -19,6 +19,14 @@ static void outb(unsigned short port, unsigned char data)
     __asm__ volatile ("outb %0, %1" : : "a" (data), "Nd" (port));
 }
 
+/* Read 16-bit from port */
+static unsigned short inw(unsigned short port)
+{
+    unsigned short result;
+    __asm__ volatile ("inw %1, %0" : "=a" (result) : "Nd" (port));
+    return result;
+}
+
 /* Helper: Wait for drive to be ready */
 static void ide_wait_ready(unsigned short status_port)
 {
@@ -31,6 +39,62 @@ static void ide_wait_ready(unsigned short status_port)
             return;
         }
     }
+}
+
+/* Read IDENTIFY data: returns 1 on success and fills total_sectors */
+static int ata_identify(unsigned short base_port, int is_slave, unsigned int *total_sectors)
+{
+    unsigned char status;
+    unsigned short data[256];
+    int i;
+
+    /* Select drive */
+    outb(base_port + 6, is_slave ? 0xB0 : 0xA0);
+
+    /* Zero sector count and LBA registers as per spec */
+    outb(base_port + 2, 0);
+    outb(base_port + 3, 0);
+    outb(base_port + 4, 0);
+    outb(base_port + 5, 0);
+
+    /* Send IDENTIFY DEVICE (0xEC) */
+    outb(base_port + 7, 0xEC);
+
+    /* Check if drive responded */
+    status = inb(base_port + 7);
+    if (status == 0) {
+        return 0;
+    }
+
+    /* Wait while BUSY, then check DRQ */
+    int timeout = 100000;
+    while ((status = inb(base_port + 7)) & IDE_STATUS_BSY) {
+        if (--timeout == 0) return 0;
+    }
+    if (!(status & IDE_STATUS_DRQ)) {
+        return 0;
+    }
+
+    /* Read 256 words (512 bytes) */
+    for (i = 0; i < 256; i++) {
+        data[i] = inw(base_port + 0);
+    }
+
+    /* Total LBA28 sectors are in words 60-61 */
+    unsigned int lba28 = ((unsigned int)data[61] << 16) | (unsigned int)data[60];
+    if (lba28 > 0) {
+        *total_sectors = lba28;
+        return 1;
+    }
+
+    /* If LBA28 is zero, try LBA48 in words 100-103 (lower 32 bits for simplicity) */
+    unsigned int lba48_low = ((unsigned int)data[103] << 16) | (unsigned int)data[102];
+    if (lba48_low > 0) {
+        *total_sectors = lba48_low; /* Note: truncated if >4GiB sectors */
+        return 1;
+    }
+
+    return 0;
 }
 
 /* Helper: Detect if a drive exists */
@@ -96,6 +160,32 @@ void fs_list(FilesystemMap *fs_map)
             kprint(drive_num_str);
             kprint(": ");
             kprint(drive->model);
+            kprint("  id=");
+            kprint(drive->idNAME);
+            kprint("  size=");
+            /* print size_mb as decimal */
+            {
+                char buf[12];
+                unsigned int v = drive->size_mb;
+                int idx = 0;
+                if (v == 0) {
+                    buf[idx++] = '0';
+                } else {
+                    char tmp[12];
+                    int t = 0;
+                    while (v > 0 && t < 11) {
+                        tmp[t++] = (char)('0' + (v % 10));
+                        v /= 10;
+                    }
+                    while (t > 0) {
+                        buf[idx++] = tmp[--t];
+                    }
+                }
+                buf[idx++] = 'M';
+                buf[idx++] = 'B';
+                buf[idx] = '\0';
+                kprint(buf);
+            }
             kprint("\n");
         }
     }
@@ -117,6 +207,7 @@ void fs_init(FilesystemMap *fs_map)
         fs_map->drives[i].size_mb = 0;
         fs_map->drives[i].present = 0;
         fs_map->drives[i].model[0] = '\0';
+        fs_map->drives[i].idNAME[0] = '\0';
     }
     
     kprint("Detecting drives...\n");
@@ -129,6 +220,14 @@ void fs_init(FilesystemMap *fs_map)
         fs_map->drives[0].present = 1;
         fs_map->drives[0].type = DRIVE_TYPE_ATA;
         strcpy_local(fs_map->drives[0].model, "Primary Master");
+        strcpy_local(fs_map->drives[0].idNAME, "ide0");
+        {
+            unsigned int sectors = 0;
+            if (ata_identify(IDE_PRIMARY_DATA, 0, &sectors)) {
+                /* size in MB: sectors * 512 bytes / (1024*1024) = sectors / 2048 */
+                fs_map->drives[0].size_mb = sectors / 2048;
+            }
+        }
         fs_map->drive_count++;
     } else {
         kprint("  [0] Primary Master: Not found\n");
@@ -142,6 +241,13 @@ void fs_init(FilesystemMap *fs_map)
         fs_map->drives[1].present = 1;
         fs_map->drives[1].type = DRIVE_TYPE_ATA;
         strcpy_local(fs_map->drives[1].model, "Primary Slave");
+        strcpy_local(fs_map->drives[1].idNAME, "ide1");
+        {
+            unsigned int sectors = 0;
+            if (ata_identify(IDE_PRIMARY_DATA, 1, &sectors)) {
+                fs_map->drives[1].size_mb = sectors / 2048;
+            }
+        }
         fs_map->drive_count++;
     } else {
         kprint("  [1] Primary Slave: Not found\n");
@@ -155,6 +261,13 @@ void fs_init(FilesystemMap *fs_map)
         fs_map->drives[2].present = 1;
         fs_map->drives[2].type = DRIVE_TYPE_ATA;
         strcpy_local(fs_map->drives[2].model, "Secondary Master");
+        strcpy_local(fs_map->drives[2].idNAME, "ide2");
+        {
+            unsigned int sectors = 0;
+            if (ata_identify(IDE_SECONDARY_DATA, 0, &sectors)) {
+                fs_map->drives[2].size_mb = sectors / 2048;
+            }
+        }
         fs_map->drive_count++;
     } else {
         kprint("  [2] Secondary Master: Not found\n");
@@ -168,6 +281,13 @@ void fs_init(FilesystemMap *fs_map)
         fs_map->drives[3].present = 1;
         fs_map->drives[3].type = DRIVE_TYPE_ATA;
         strcpy_local(fs_map->drives[3].model, "Secondary Slave");
+        strcpy_local(fs_map->drives[3].idNAME, "ide3");
+        {
+            unsigned int sectors = 0;
+            if (ata_identify(IDE_SECONDARY_DATA, 1, &sectors)) {
+                fs_map->drives[3].size_mb = sectors / 2048;
+            }
+        }
         fs_map->drive_count++;
     } else {
         kprint("  [3] Secondary Slave: Not found\n");

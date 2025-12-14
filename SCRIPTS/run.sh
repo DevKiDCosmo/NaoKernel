@@ -34,11 +34,11 @@ prepare_drives() {
 
     # Generate disk.sh and disk.dir (5 HDDs + 2 FDDs by default), pass lib.sh for logging
     (cd "$TMP_DIR" && "$PY_BIN" "$SCRIPT_DIR/disk.py" \
-        10MBD 10MBD 8MBD 6MBD 3MBD \
-        2MBF 10MBF \
+        1024MBD 10MBD 10MBD 8MBD 6MBD 3MBD \
+        2MBF 10MBF 349MBF 239MBF \
         --lib-path "$SCRIPT_DIR/lib.sh")
 
-    log_info "Run the following command to generate disk.sh: $PY_BIN $SCRIPT_DIR/disk.py 10MBD 10MBD 8MBD 6MBD 3MBD 2MBF 10MBF"
+    log_info "Run the following command to generate disk.sh: $PY_BIN $SCRIPT_DIR/disk.py 1024MBD 10MBD 10MBD 8MBD 6MBD 3MBD 2MBF 10MBF 349MBF 239MBF"
 
     # Run the generated script to create the images
     (cd "$TMP_DIR" && bash disk.sh)

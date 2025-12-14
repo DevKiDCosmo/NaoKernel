@@ -38,6 +38,11 @@ build_kernel() {
     log_build "Compiling shell (shell/shell.c)..."
     gcc -fno-stack-protector -m32 -c shell/shell.c -o bin/shell.o
     log_success "Shell compiled"
+
+    # Compile format
+    log_build "Compiling format module (fs/format/format.c)..."
+    gcc -fno-stack-protector -m32 -c fs/format/format.c -o bin/format.o
+    log_success "Format module compiled"
     
     # Compile kernel
     log_build "Compiling kernel (kernel.c)..."
@@ -54,7 +59,7 @@ build_kernel() {
     
     # Link everything together
     log_build "Linking kernel..."
-    ld -m elf_i386 -T link.ld -o bin/kernel bin/kasm.o bin/kc.o bin/output.o bin/input.o bin/shell.o bin/fs.o bin/tokenizer.o
+    ld -m elf_i386 -T link.ld -o bin/kernel bin/kasm.o bin/kc.o bin/output.o bin/input.o bin/shell.o bin/fs.o bin/format.o bin/tokenizer.o
     log_success "Kernel linked successfully"
     
     log_success "Build complete! Kernel binary: bin/kernel"

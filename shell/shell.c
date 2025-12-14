@@ -8,6 +8,7 @@
 #include "../essentials/types.h"
 #include "tokenizer.h"
 #include "../fs/fs.h"
+#include "../fs/format/format.h"
 
 /* External global filesystem map from kernel */
 extern FilesystemMap global_fs_map;
@@ -40,6 +41,7 @@ static char *find_space(char *str);
 static int strlen_custom(const char *str);
 static char to_lower(char c);
 static int strncmp_case_insensitive(const char *s1, const char *s2, int n);
+static void strcpy_local(char *dest, const char *src);
 
 /* Command implementations */
 
@@ -107,7 +109,7 @@ void cmd_disk(char *args)
 	/* Empty command */
 	if (subcmd[0] == '\0')
 	{
-		kprint("Usage: disk <list|mount>\n");
+		kprint("Usage: disk <list|mount|format>\n");
 		return;
 	}
 
@@ -133,9 +135,62 @@ void cmd_disk(char *args)
 			kprint_newline();
 		}
 	}
+	else if (strncmp_case_insensitive(subcmd, "format", subcmd_len) == 0 && subcmd_len == 6) {
+		kprint("Formatting disk...\n");
+
+		// Check if drive exists
+		if (global_fs_map.drive_count == 0) {
+			kprint("No drives available to format.\n");
+			return;
+		}
+		
+		char *device_args = skip_spaces(subcmd_end);
+		if (device_args[0] != '\0')
+		{
+			kprint("  Device: ");
+			kprint(device_args);
+			kprint_newline();
+		}
+
+		char *fs_type_args = skip_spaces(find_space(device_args));
+		if (fs_type_args[0] != '\0')
+		{
+			kprint("  Filesystem Type: ");
+			kprint(fs_type_args);
+			kprint_newline();
+		}
+
+		// Get position of drive based on device_args
+		// For simplicity, assume device_args is "ide0", "ide1", etc
+		int pos = -1;
+		if (strncmp_case_insensitive(device_args, "ide0", 4) == 0) {
+			pos = 0;
+		} else if (strncmp_case_insensitive(device_args, "ide1", 4) == 0) {
+			pos = 1;
+		} else if (strncmp_case_insensitive(device_args, "ide2", 4) == 0) {
+			pos = 2;
+		} else if (strncmp_case_insensitive(device_args, "ide3", 4) == 0) {
+			pos = 3;
+		} else {
+			kprint("Unknown device specified.\n");
+			return;
+		}
+
+		DriveInfo *drive = &global_fs_map.drives[pos];
+		FormatOptions opts = {0};
+		strcpy_local(opts.volume_label, "MYVOLUME");
+		opts.quick_format = 1;
+
+		FormatResult result = format_drive(drive, &opts);
+		if (result == FORMAT_SUCCESS) {
+			kprint("Format successful!\n");
+		} else {
+			kprint(get_format_result_string(result));
+		}
+	}
 	else
 	{
-		kprint("Unknown disk command. Use 'list' or 'mount'.\n");
+		kprint("Unknown disk command. Use 'list' or 'mount' or 'format'.\n");
 	}
 	return;
 }
@@ -262,6 +317,16 @@ static int strncmp_case_insensitive(const char *s1, const char *s2, int n)
 		}
 	}
 	return 0;
+}
+
+/* Local string copy implementation */
+static void strcpy_local(char *dest, const char *src)
+{
+	while (*src != '\0')
+	{
+		*dest++ = *src++;
+	}
+	*dest = '\0';
 }
 
 /* Parse and execute shell commands - returns 1 if command found, 0 if not */
