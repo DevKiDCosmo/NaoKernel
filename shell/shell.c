@@ -35,6 +35,16 @@ typedef struct
 	const char *description;
 } Command;
 
+/* Forward declarations of filesystem commands (defined in fs_commands.c) */
+extern void cmd_ls(char *args);
+extern void cmd_cat(char *args);
+extern void cmd_touch(char *args);
+extern void cmd_mkdir(char *args);
+extern void cmd_rm(char *args);
+extern void cmd_cp(char *args);
+extern void cmd_pwd(void);
+extern void cmd_cd(char *args);
+
 static Command command_map[];
 
 /* Forward declarations of helper functions */
@@ -389,6 +399,15 @@ static Command command_map[] = {
 	{"history", (void *)cmd_history, 0, 0, "Show command history"},
 	{"disk", (void *)cmd_disk, 1, 0, "Disk operations (list, mount, dismount, format)"},
 	{"switch", (void *)cmd_switch, 1, 0, "Switch to mounted drive"},
+	/* Filesystem commands */
+	{"ls", (void *)cmd_ls, 1, 0, "List files in current directory"},
+	{"cat", (void *)cmd_cat, 1, 0, "Display file contents"},
+	{"touch", (void *)cmd_touch, 1, 0, "Create empty file"},
+	{"mkdir", (void *)cmd_mkdir, 1, 0, "Create directory"},
+	{"rm", (void *)cmd_rm, 1, 0, "Delete file"},
+	{"cp", (void *)cmd_cp, 1, 0, "Copy file"},
+	{"pwd", (void *)cmd_pwd, 0, 0, "Print working directory"},
+	{"cd", (void *)cmd_cd, 1, 0, "Change directory"},
 	{0, 0, 0, 0, 0}									  /* Sentinel entry */
 };
 
