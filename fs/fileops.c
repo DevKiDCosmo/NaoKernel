@@ -300,6 +300,11 @@ int fileops_read_file(const char *name, unsigned char *buffer, unsigned int max_
         return 0;  /* Invalid cluster */
     }
     
+    /* Validate block number is within ramdisk bounds */
+    if (DATA_BLOCK_START + cluster >= MAX_BLOCKS) {
+        return 0;  /* Block out of bounds */
+    }
+    
     block = ramdisk_get_block(DATA_BLOCK_START + cluster);
     bytes_to_copy = entry->file_size;
     if (bytes_to_copy > max_size) {
@@ -339,6 +344,11 @@ int fileops_write_file(const char *name, const unsigned char *data, unsigned int
     
     if (cluster == 0 || cluster > MAX_DATA_CLUSTERS) {
         return -1;  /* Invalid cluster */
+    }
+    
+    /* Validate block number is within ramdisk bounds */
+    if (DATA_BLOCK_START + cluster >= MAX_BLOCKS) {
+        return -1;  /* Block out of bounds */
     }
     
     block = ramdisk_get_block(DATA_BLOCK_START + cluster);
