@@ -66,7 +66,7 @@ void cmd_ls(char *args)
     
     kprint("Files in root directory:\n");
     for (i = 0; i < MAX_ROOT_ENTRIES; i++) {
-        if (entries[i].name[0] != 0x00 && entries[i].name[0] != 0xE5) {
+        if (entries[i].name[0] != DIR_ENTRY_FREE && entries[i].name[0] != DIR_ENTRY_DELETED) {
             /* Print name */
             for (j = 0; j < 8; j++) {
                 if (entries[i].name[j] != ' ') {
@@ -307,7 +307,7 @@ void cmd_echo_to_file(char *args)
     filename[i] = '\0';  /* Null-terminate filename */
     
     /* Create file if it doesn't exist */
-    if (fileops_find_entry(filename) == (DirectoryEntry*)0) {
+    if (fileops_find_entry(filename) == 0) {
         if (fileops_create_file(filename) < 0) {
             kprint("Error: Cannot create file\n");
             return;

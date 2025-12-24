@@ -7,6 +7,47 @@
 extern void kprint(const char *str);
 extern void kprint_newline(void);
 
+/* Simple cluster allocation bitmap (1 bit per cluster) */
+static unsigned char cluster_bitmap[MAX_DATA_CLUSTERS / 8 + 1];
+
+/* Helper: Mark cluster as used */
+static void mark_cluster_used(unsigned int cluster)
+{
+    if (cluster > 0 && cluster <= MAX_DATA_CLUSTERS) {
+        cluster_bitmap[(cluster - 1) / 8] |= (1 << ((cluster - 1) % 8));
+    }
+}
+
+/* Helper: Mark cluster as free */
+static void mark_cluster_free(unsigned int cluster)
+{
+    if (cluster > 0 && cluster <= MAX_DATA_CLUSTERS) {
+        cluster_bitmap[(cluster - 1) / 8] &= ~(1 << ((cluster - 1) % 8));
+    }
+}
+
+/* Helper: Check if cluster is used */
+static int is_cluster_used(unsigned int cluster)
+{
+    if (cluster == 0 || cluster > MAX_DATA_CLUSTERS) {
+        return 1;  /* Invalid clusters are considered used */
+    }
+    return (cluster_bitmap[(cluster - 1) / 8] & (1 << ((cluster - 1) % 8))) != 0;
+}
+
+/* Helper: Allocate a free cluster */
+static unsigned int allocate_cluster(void)
+{
+    unsigned int cluster;
+    for (cluster = 1; cluster <= MAX_DATA_CLUSTERS; cluster++) {
+        if (!is_cluster_used(cluster)) {
+            mark_cluster_used(cluster);
+            return cluster;
+        }
+    }
+    return 0;  /* No free clusters */
+}
+
 /* Helper: Simple string operations */
 static int strlen_local(const char *str)
 {
@@ -125,8 +166,8 @@ int fileops_list_root(DirectoryEntry **out_entries)
     
     /* Count non-empty entries */
     for (i = 0; i < MAX_ROOT_ENTRIES; i++) {
-        if (entries[i].name[0] != 0x00 && 
-            entries[i].name[0] != 0xE5) {  /* 0xE5 = deleted */
+        if (entries[i].name[0] != DIR_ENTRY_FREE && 
+            entries[i].name[0] != DIR_ENTRY_DELETED) {
             count++;
         }
     }
@@ -147,7 +188,7 @@ DirectoryEntry* fileops_find_entry(const char *name)
     fileops_format_name(name, search_name, search_ext);
     
     for (i = 0; i < MAX_ROOT_ENTRIES; i++) {
-        if (entries[i].name[0] == 0x00 || entries[i].name[0] == 0xE5) {
+        if (entries[i].name[0] == DIR_ENTRY_FREE || entries[i].name[0] == DIR_ENTRY_DELETED) {
             continue;
         }
         
@@ -194,7 +235,7 @@ int fileops_create_file(const char *name)
     fileops_list_root(&entries);
     
     for (i = 0; i < MAX_ROOT_ENTRIES; i++) {
-        if (entries[i].name[0] == 0x00 || entries[i].name[0] == 0xE5) {
+        if (entries[i].name[0] == DIR_ENTRY_FREE || entries[i].name[0] == DIR_ENTRY_DELETED) {
             free_entry = &entries[i];
             break;
         }
@@ -226,8 +267,13 @@ int fileops_delete_file(const char *name)
         return -1;  /* File not found */
     }
     
+    /* Free the cluster if allocated */
+    if (entry->start_cluster != 0) {
+        mark_cluster_free(entry->start_cluster);
+    }
+    
     /* Mark entry as deleted */
-    entry->name[0] = 0xE5;
+    entry->name[0] = DIR_ENTRY_DELETED;
     
     return 0;
 }
@@ -250,7 +296,7 @@ int fileops_read_file(const char *name, unsigned char *buffer, unsigned int max_
     
     /* For simplicity, read from single cluster */
     cluster = entry->start_cluster;
-    if (cluster == 0 || cluster >= 512) {
+    if (cluster == 0 || cluster > MAX_DATA_CLUSTERS) {
         return 0;  /* Invalid cluster */
     }
     
@@ -280,23 +326,18 @@ int fileops_write_file(const char *name, const unsigned char *data, unsigned int
         size = BLOCK_SIZE;  /* Limit to one block for simplicity */
     }
     
-    /* Allocate cluster if needed (simple allocation: use entry index as cluster) */
+    /* Allocate cluster if needed */
     if (entry->start_cluster == 0) {
-        /* Calculate cluster number based on entry position */
-        DirectoryEntry *entries;
-        int i;
-        fileops_list_root(&entries);
-        
-        for (i = 0; i < MAX_ROOT_ENTRIES; i++) {
-            if (&entries[i] == entry) {
-                entry->start_cluster = i + 1;  /* Cluster numbers start at 1 */
-                break;
-            }
+        cluster = allocate_cluster();
+        if (cluster == 0) {
+            return -1;  /* No free clusters */
         }
+        entry->start_cluster = cluster;
+    } else {
+        cluster = entry->start_cluster;
     }
     
-    cluster = entry->start_cluster;
-    if (cluster == 0 || cluster >= 512) {
+    if (cluster == 0 || cluster > MAX_DATA_CLUSTERS) {
         return -1;  /* Invalid cluster */
     }
     
@@ -362,7 +403,7 @@ int fileops_create_dir(const char *name)
     fileops_list_root(&entries);
     
     for (i = 0; i < MAX_ROOT_ENTRIES; i++) {
-        if (entries[i].name[0] == 0x00 || entries[i].name[0] == 0xE5) {
+        if (entries[i].name[0] == DIR_ENTRY_FREE || entries[i].name[0] == DIR_ENTRY_DELETED) {
             free_entry = &entries[i];
             break;
         }

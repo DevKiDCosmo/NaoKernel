@@ -10,10 +10,15 @@
 #define ATTR_DIRECTORY 0x10
 #define ATTR_ARCHIVE 0x20
 
+/* Directory entry markers */
+#define DIR_ENTRY_FREE 0x00
+#define DIR_ENTRY_DELETED 0xE5
+
 #define MAX_ROOT_ENTRIES 16
 #define FAT_BLOCKS 2
 #define ROOT_DIR_BLOCK 3
 #define DATA_BLOCK_START 4
+#define MAX_DATA_CLUSTERS 500  /* 500 data clusters available (blocks 4-503) */
 
 /* Root directory entry (32 bytes) */
 typedef struct {
