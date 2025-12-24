@@ -134,15 +134,19 @@ void cmd_disk(char *args)
 			return;
 		}
 
-		/* Find the drive by ID */
+		/* Find the drive by ID - check for exact match */
 		int pos = -1;
-		if (strncmp_case_insensitive(device_args, "ide0", 4) == 0) {
+		if (strncmp_case_insensitive(device_args, "ide0", 4) == 0 && 
+		    (device_args[4] == '\0' || device_args[4] == ' ' || device_args[4] == '\t')) {
 			pos = 0;
-		} else if (strncmp_case_insensitive(device_args, "ide1", 4) == 0) {
+		} else if (strncmp_case_insensitive(device_args, "ide1", 4) == 0 && 
+		           (device_args[4] == '\0' || device_args[4] == ' ' || device_args[4] == '\t')) {
 			pos = 1;
-		} else if (strncmp_case_insensitive(device_args, "ide2", 4) == 0) {
+		} else if (strncmp_case_insensitive(device_args, "ide2", 4) == 0 && 
+		           (device_args[4] == '\0' || device_args[4] == ' ' || device_args[4] == '\t')) {
 			pos = 2;
-		} else if (strncmp_case_insensitive(device_args, "ide3", 4) == 0) {
+		} else if (strncmp_case_insensitive(device_args, "ide3", 4) == 0 && 
+		           (device_args[4] == '\0' || device_args[4] == ' ' || device_args[4] == '\t')) {
 			pos = 3;
 		} else {
 			kprint("Unknown device specified.\n");
@@ -248,13 +252,18 @@ void cmd_disk(char *args)
 		// Get position of drive based on device_args
 		// For simplicity, assume device_args is "ide0", "ide1", etc
 		int pos = -1;
-		if (strncmp_case_insensitive(device_args, "ide0", 4) == 0) {
+		// Check for exact match by verifying next character is space/tab/null
+		if (strncmp_case_insensitive(device_args, "ide0", 4) == 0 && 
+		    (device_args[4] == '\0' || device_args[4] == ' ' || device_args[4] == '\t')) {
 			pos = 0;
-		} else if (strncmp_case_insensitive(device_args, "ide1", 4) == 0) {
+		} else if (strncmp_case_insensitive(device_args, "ide1", 4) == 0 && 
+		           (device_args[4] == '\0' || device_args[4] == ' ' || device_args[4] == '\t')) {
 			pos = 1;
-		} else if (strncmp_case_insensitive(device_args, "ide2", 4) == 0) {
+		} else if (strncmp_case_insensitive(device_args, "ide2", 4) == 0 && 
+		           (device_args[4] == '\0' || device_args[4] == ' ' || device_args[4] == '\t')) {
 			pos = 2;
-		} else if (strncmp_case_insensitive(device_args, "ide3", 4) == 0) {
+		} else if (strncmp_case_insensitive(device_args, "ide3", 4) == 0 && 
+		           (device_args[4] == '\0' || device_args[4] == ' ' || device_args[4] == '\t')) {
 			pos = 3;
 		} else {
 			kprint("Unknown device specified.\n");
@@ -262,6 +271,14 @@ void cmd_disk(char *args)
 		}
 
 		DriveInfo *drive = &global_fs_map.drives[pos];
+		
+		// Check if drive is actually present
+		if (!drive->present) {
+			kprint("Error: Drive ");
+			kprint(device_args);
+			kprint(" is not present.\n");
+			return;
+		}
 		FormatOptions opts = {0};
 		strcpy_local(opts.volume_label, "MYVOLUME");
 		opts.quick_format = 1;
