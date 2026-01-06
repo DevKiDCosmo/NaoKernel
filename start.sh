@@ -84,7 +84,7 @@ check_dependencies() {
 
 build_kernel() {
     log_step "Building kernel..."
-    
+
     case $OS_TYPE in
         DOCKER)
             log_info "Using standard build in Docker environment"
@@ -93,7 +93,12 @@ build_kernel() {
         LINUX)
             if [[ "$DISTRO" == "ubuntu" || "$DISTRO" == "debian" || "$DISTRO" == *"debian"* ]]; then
                 log_info "Building on Ubuntu/Debian - using Docker build"
-                bash "$SCRIPT_DIR/SCRIPTS/docker-build.sh"
+                if [[ "$force_native" == true ]]; then
+                    log_info "Force native build requested"
+                    bash "$SCRIPT_DIR/SCRIPTS/build.sh"
+                else
+                    bash "$SCRIPT_DIR/SCRIPTS/docker-build.sh"
+                fi
             else
                 log_info "Building natively on Linux"
                 bash "$SCRIPT_DIR/SCRIPTS/build.sh"
@@ -145,6 +150,7 @@ OPTIONS:
     --native-build, -n  Force native build (direct compilation)
 
     --force-build, -f   Force rebuild even if kernel exists (with run and runtemp)
+    --force-native, -fn Force native build and rebuild
 
 EXAMPLES:
     $0 --build          Build the kernel
@@ -178,10 +184,14 @@ main() {
     local force_build=false
     
     # Check for force build flag in all arguments
+    local force_native=false
     for arg in "$@"; do
         if [[ "$arg" == "-f" || "$arg" == "--force-build" ]]; then
             force_build=true
-            break
+        fi
+        if [[ "$arg" == "-fn" || "$arg" == "--force-native" ]]; then
+            force_build=true
+            force_native=true
         fi
     done
     
@@ -213,6 +223,9 @@ main() {
             ;;
         --native-build|-n)
             action="native_build"
+            ;;
+        --force-native|-fn)
+            action="native_build_force"
             ;;
         "")
             action="build_and_run"
@@ -290,6 +303,13 @@ main() {
             check_dependencies
             bash "$SCRIPT_DIR/SCRIPTS/build.sh"
             log_success "Native build complete!"
+            ;;
+        native_build_force)
+            log_step "Force native rebuild..."
+            check_dependencies
+            rm -rf bin/*.o bin/kernel
+            bash "$SCRIPT_DIR/SCRIPTS/build.sh"
+            log_success "Native force rebuild complete!"
             ;;
     esac
     
