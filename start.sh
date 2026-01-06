@@ -129,6 +129,71 @@ run_kernel() {
 }
 
 # ============================================================================
+# Status Check
+# ============================================================================
+status() {
+    log_step "Checking project status..."
+
+    local missing=()
+    local scripts=(
+        "SCRIPTS/build.sh"
+        "SCRIPTS/docker-build.sh"
+        "SCRIPTS/install.sh"
+        "SCRIPTS/run.sh"
+        "SCRIPTS/setup-drives.sh"
+        "SCRIPTS/lib.sh"
+    )
+
+    for s in "${scripts[@]}"; do
+        if [[ ! -f "$SCRIPT_DIR/$s" ]]; then
+            missing+=("$s")
+        fi
+    done
+
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        log_warning "Missing helper scripts: ${missing[*]}"
+    else
+        log_success "All helper scripts present"
+    fi
+
+    # Build artifacts
+    if [[ -f "bin/kernel" ]]; then
+        log_success "Build artifact: bin/kernel present"
+    else
+        log_warning "bin/kernel not found"
+    fi
+
+    shopt -s nullglob
+    local objs=(bin/*.o)
+    if [[ ${#objs[@]} -gt 0 ]]; then
+        log_info "Object files in bin/: ${#objs[@]}"
+    else
+        log_warning "No object files found in bin/"
+    fi
+    shopt -u nullglob
+
+    # Check for downloaded/run assets
+    if [[ -d "run" ]]; then
+        if [[ -f "run/disk.dir" ]]; then
+            log_success "Drive images present (run/disk.dir)"
+        else
+            log_warning "run/ exists but run/disk.dir missing"
+        fi
+    else
+        log_warning "No run/ directory found (drive images may be missing)"
+    fi
+
+    # Check common external tool availability
+    if command_exists qemu-system-i386; then
+        log_success "qemu-system-i386 available"
+    else
+        log_info "qemu-system-i386 not found (may need installation)"
+    fi
+
+    log_success "Status check complete"
+}
+
+# ============================================================================
 # Help Text
 # ============================================================================
 
@@ -144,6 +209,7 @@ OPTIONS:
     --run, -r           Run the kernel (builds first if needed)
     --runtemp, -t       Run the kernel with temporary drives
     --clean, -c         Clean build artifacts
+    --status, -s        Show project status (scripts, artifacts, downloads)
     --install, -i       Install dependencies (Ubuntu/Debian only)
     --setup-drives      Setup disk and floppy images (Ubuntu only)
     --docker-build, -d  Force Docker build (Ubuntu compilation)
@@ -217,6 +283,9 @@ main() {
             ;;
         --setup-drives)
             action="setup_drives"
+            ;;
+        --status|-s)
+            action="status"
             ;;
         --docker-build|-d)
             action="docker_build"
@@ -310,6 +379,9 @@ main() {
             rm -rf bin/*.o bin/kernel
             bash "$SCRIPT_DIR/SCRIPTS/build.sh"
             log_success "Native force rebuild complete!"
+            ;;
+        status)
+            status
             ;;
     esac
     

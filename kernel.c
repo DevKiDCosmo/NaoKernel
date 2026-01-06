@@ -8,6 +8,7 @@
 #include "input/input.h"
 #include "fs/fs.h"
 #include "fs/mount/mount.h"
+#include "fs/fileops.h"
 
 /* there are 25 lines each of 80 columns; each element takes 2 bytes */
 #define LINES 25
@@ -208,6 +209,10 @@ void kmain(void)
 	kb_init();
 
 	/* Initialize Ram and Drives */
+	
+	/* Initialize ramdisk filesystem */
+	kprint("Initializing ramdisk filesystem...\n");
+	fileops_init();
 
 	/* Initialize filesystems */
     fs_init(&global_fs_map);

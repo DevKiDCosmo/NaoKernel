@@ -58,13 +58,29 @@ build_kernel() {
     log_build "Compiling file system (fs/fs.c)..."
     gcc -fno-stack-protector -m32 -c fs/fs.c -o bin/fs.o
     log_success "File system compiled"
+    
+    # Compile ramdisk
+    log_build "Compiling ramdisk module (fs/ramdisk.c)..."
+    gcc -fno-stack-protector -m32 -c fs/ramdisk.c -o bin/ramdisk.o
+    log_success "Ramdisk module compiled"
+    
+    # Compile file operations
+    log_build "Compiling file operations (fs/fileops.c)..."
+    gcc -fno-stack-protector -m32 -c fs/fileops.c -o bin/fileops.o
+    log_success "File operations compiled"
+    
+    # Compile filesystem commands
+    log_build "Compiling filesystem commands (shell/fs_commands.c)..."
+    gcc -fno-stack-protector -m32 -c shell/fs_commands.c -o bin/fs_commands.o
+    log_success "Filesystem commands compiled"
+    
     log_build "Compiling tokenizer (tokenizer/tokenizer.c)..."
     gcc -fno-stack-protector -m32 -c shell/tokenizer.c -o bin/tokenizer.o
     log_success "Tokenizer compiled"
     
     # Link everything together
     log_build "Linking kernel..."
-    ld -m elf_i386 -T link.ld -o bin/kernel bin/kasm.o bin/kc.o bin/output.o bin/input.o bin/shell.o bin/fs.o bin/format.o bin/mount.o bin/tokenizer.o
+    ld -m elf_i386 -T link.ld -o bin/kernel bin/kasm.o bin/kc.o bin/output.o bin/input.o bin/shell.o bin/fs.o bin/format.o bin/mount.o bin/ramdisk.o bin/fileops.o bin/fs_commands.o bin/tokenizer.o
     log_success "Kernel linked successfully"
     
     log_success "Build complete! Kernel binary: bin/kernel"
