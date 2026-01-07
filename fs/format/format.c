@@ -2,6 +2,7 @@
 
 #include "format.h"
 #include "../fs.h"
+#include "../fileops.h"
 
 /* External output functions */
 extern void kprint(const char *str);
@@ -80,50 +81,69 @@ static int ata_wait_ready(unsigned short base_port, int timeout)
     return 0;
 }
 
+/* Wait for data request */
+static int ata_wait_drq(unsigned short base_port, int timeout)
+{
+    unsigned char status;
+    while (timeout-- > 0) {
+        status = inb(base_port + 7);
+        if (!(status & IDE_STATUS_BSY) && (status & IDE_STATUS_DRQ)) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 /* Write a single sector to ATA drive */
 static int ata_write_sector(DriveInfo *drive, unsigned int lba, void *buffer)
 {
-    unsigned short base_port;
+    unsigned short data_port;
+    unsigned short control_port;
     unsigned char drive_select;
     unsigned short *buf = (unsigned short*)buffer;
     int i;
     
     /* Determine port and drive select based on drive number */
     if (drive->drive_number < 2) {
-        base_port = IDE_PRIMARY_DATA;
+        /* Primary channel */
+        data_port = IDE_PRIMARY_DATA;
         drive_select = (drive->drive_number == 0) ? 0xE0 : 0xF0;
     } else {
-        base_port = IDE_SECONDARY_DATA;
+        /* Secondary channel */
+        data_port = IDE_SECONDARY_DATA;
         drive_select = (drive->drive_number == 2) ? 0xE0 : 0xF0;
     }
     
     /* LBA28 mode: select drive and set LBA bits 24-27 */
-    outb(base_port + 6, drive_select | ((lba >> 24) & 0x0F));
+    outb(data_port + 6, drive_select | ((lba >> 24) & 0x0F));
+    
+    /* Wait for drive to stabilize after selection */
+    int wait_count = 0;
+    while (wait_count < 2000) wait_count++;
     
     /* Write sector count (1) */
-    outb(base_port + 2, 1);
+    outb(data_port + 2, 1);
     
     /* Write LBA low, mid, high */
-    outb(base_port + 3, lba & 0xFF);
-    outb(base_port + 4, (lba >> 8) & 0xFF);
-    outb(base_port + 5, (lba >> 16) & 0xFF);
+    outb(data_port + 3, lba & 0xFF);
+    outb(data_port + 4, (lba >> 8) & 0xFF);
+    outb(data_port + 5, (lba >> 16) & 0xFF);
     
     /* Send WRITE SECTORS command (0x30) */
-    outb(base_port + 7, 0x30);
+    outb(data_port + 7, 0x30);
     
-    /* Wait for drive ready */
-    if (!ata_wait_ready(base_port, 10000)) {
+    /* Wait for DRQ (drive ready for data) */
+    if (!ata_wait_drq(data_port, 10000)) {
         return 0;
     }
     
     /* Write 256 words (512 bytes) */
     for (i = 0; i < 256; i++) {
-        outw(base_port, buf[i]);
+        outw(data_port, buf[i]);
     }
     
-    /* Flush cache */
-    outb(base_port + 7, 0xE7);
-    if (!ata_wait_ready(base_port, 10000)) {
+    /* Wait for write to complete (RDY) */
+    if (!ata_wait_ready(data_port, 10000)) {
         return 0;
     }
     
@@ -483,6 +503,7 @@ static FormatResult format_fat32(DriveInfo *drive, FormatOptions *options)
 FormatResult format_drive(DriveInfo *drive, FormatOptions *options)
 {
     MediaType media;
+    FormatResult result;
     
     if (!drive || !drive->present) {
         return FORMAT_ERROR_INVALID_DRIVE;
@@ -501,6 +522,16 @@ FormatResult format_drive(DriveInfo *drive, FormatOptions *options)
     kprint(drive->model);
     kprint(")...\n");
     
+    /* Debug: print detected media type value */
+    kprint("  Media type: ");
+    {
+        char media_str[8];
+        media_str[0] = '0' + (media % 10);
+        media_str[1] = '\0';
+        kprint(media_str);
+    }
+    kprint("\n");
+    
     /* Select appropriate format method */
     switch (media) {
         case MEDIA_TYPE_FLOPPY_360KB:
@@ -509,23 +540,30 @@ FormatResult format_drive(DriveInfo *drive, FormatOptions *options)
         case MEDIA_TYPE_FLOPPY_1_44MB:
         case MEDIA_TYPE_FLOPPY_2_88MB:
             kprint("  Detected: Floppy disk (FAT12)\n");
-            return format_fat12(drive, options);
+            result = format_fat12(drive, options);
+            break;
             
         case MEDIA_TYPE_HDD_SMALL:
             kprint("  Detected: Small HDD (FAT12)\n");
-            return format_fat12(drive, options);
+            result = format_fat12(drive, options);
+            break;
             
         case MEDIA_TYPE_HDD_MEDIUM:
             kprint("  Detected: Medium HDD (FAT16)\n");
-            return format_fat16(drive, options);
+            result = format_fat16(drive, options);
+            break;
             
         case MEDIA_TYPE_HDD_LARGE:
             kprint("  Detected: Large HDD (FAT32)\n");
-            return format_fat32(drive, options);
+            result = format_fat32(drive, options);
+            break;
             
         default:
             return FORMAT_ERROR_UNSUPPORTED;
     }
+    
+    /* Don't auto-load after format - mounting will handle that */
+    return result;
 }
 
 /* Get human-readable result string */

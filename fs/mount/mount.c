@@ -2,6 +2,7 @@
 
 #include "mount.h"
 #include "../fs.h"
+#include "../fileops.h"
 
 /* External output functions */
 extern void kprint(const char *str);
@@ -11,6 +12,7 @@ extern void kprint_newline(void);
 extern char read_port(unsigned short port);
 extern void write_port(unsigned short port, unsigned char data);
 extern unsigned short read_word_port(unsigned short port);
+extern void write_word_port(unsigned short port, unsigned short data);
 
 /* Port I/O wrappers */
 static unsigned char inb(unsigned short port)
@@ -26,6 +28,12 @@ static void outb(unsigned short port, unsigned char data)
 static unsigned short inw(unsigned short port)
 {
     return read_word_port(port);
+}
+
+static void outw(unsigned short port, unsigned short data)
+{
+    /* Use proper 16-bit word write */
+    write_word_port(port, data);
 }
 
 /* String utilities */
@@ -59,45 +67,119 @@ static int ata_wait_ready(unsigned short base_port, int timeout)
     return 0;
 }
 
+/* Wait for data request */
+static int ata_wait_drq(unsigned short base_port, int timeout)
+{
+    unsigned char status;
+    while (timeout-- > 0) {
+        status = inb(base_port + 7);
+        if (!(status & IDE_STATUS_BSY) && (status & IDE_STATUS_DRQ)) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 /* Read a single sector from ATA drive */
 static int ata_read_sector(DriveInfo *drive, unsigned int lba, void *buffer)
 {
-    unsigned short base_port;
+    unsigned short data_port;
     unsigned char drive_select;
     unsigned short *buf = (unsigned short*)buffer;
     int i;
     
     /* Determine port and drive select based on drive number */
     if (drive->drive_number < 2) {
-        base_port = IDE_PRIMARY_DATA;
+        /* Primary channel */
+        data_port = IDE_PRIMARY_DATA;
         drive_select = (drive->drive_number == 0) ? 0xE0 : 0xF0;
     } else {
-        base_port = IDE_SECONDARY_DATA;
+        /* Secondary channel */
+        data_port = IDE_SECONDARY_DATA;
         drive_select = (drive->drive_number == 2) ? 0xE0 : 0xF0;
     }
     
     /* LBA28 mode: select drive and set LBA bits 24-27 */
-    outb(base_port + 6, drive_select | ((lba >> 24) & 0x0F));
+    outb(data_port + 6, drive_select | ((lba >> 24) & 0x0F));
+    
+    /* Wait for drive to stabilize after selection */
+    int wait_count = 0;
+    while (wait_count < 2000) wait_count++;
     
     /* Write sector count (1) */
-    outb(base_port + 2, 1);
+    outb(data_port + 2, 1);
     
     /* Write LBA low, mid, high */
-    outb(base_port + 3, lba & 0xFF);
-    outb(base_port + 4, (lba >> 8) & 0xFF);
-    outb(base_port + 5, (lba >> 16) & 0xFF);
+    outb(data_port + 3, lba & 0xFF);
+    outb(data_port + 4, (lba >> 8) & 0xFF);
+    outb(data_port + 5, (lba >> 16) & 0xFF);
     
     /* Send READ SECTORS command (0x20) */
-    outb(base_port + 7, 0x20);
+    outb(data_port + 7, 0x20);
     
-    /* Wait for drive ready */
-    if (!ata_wait_ready(base_port, 10000)) {
+    /* Wait for DRQ (drive has data ready) */
+    if (!ata_wait_drq(data_port, 10000)) {
         return 0;
     }
     
     /* Read 256 words (512 bytes) */
     for (i = 0; i < 256; i++) {
-        buf[i] = inw(base_port);
+        buf[i] = inw(data_port);
+    }
+    
+    return 1;
+}
+
+/* Write a single sector to ATA drive */
+static int ata_write_sector(DriveInfo *drive, unsigned int lba, const void *buffer)
+{
+    unsigned short data_port;
+    unsigned char drive_select;
+    const unsigned short *buf = (const unsigned short*)buffer;
+    int i;
+    
+    /* Determine port and drive select based on drive number */
+    if (drive->drive_number < 2) {
+        /* Primary channel */
+        data_port = IDE_PRIMARY_DATA;
+        drive_select = (drive->drive_number == 0) ? 0xE0 : 0xF0;
+    } else {
+        /* Secondary channel */
+        data_port = IDE_SECONDARY_DATA;
+        drive_select = (drive->drive_number == 2) ? 0xE0 : 0xF0;
+    }
+    
+    /* LBA28 mode: select drive and set LBA bits 24-27 */
+    outb(data_port + 6, drive_select | ((lba >> 24) & 0x0F));
+    
+    /* Wait for drive to stabilize after selection */
+    int wait_count = 0;
+    while (wait_count < 2000) wait_count++;
+    
+    /* Write sector count (1) */
+    outb(data_port + 2, 1);
+    
+    /* Write LBA low, mid, high */
+    outb(data_port + 3, lba & 0xFF);
+    outb(data_port + 4, (lba >> 8) & 0xFF);
+    outb(data_port + 5, (lba >> 16) & 0xFF);
+    
+    /* Send WRITE SECTORS command (0x30) */
+    outb(data_port + 7, 0x30);
+    
+    /* Wait for DRQ (drive ready for data) */
+    if (!ata_wait_drq(data_port, 10000)) {
+        return 0;
+    }
+    
+    /* Write 256 words (512 bytes) */
+    for (i = 0; i < 256; i++) {
+        outw(data_port, buf[i]);
+    }
+    
+    /* Wait for write to complete (RDY) */
+    if (!ata_wait_ready(data_port, 10000)) {
+        return 0;
     }
     
     return 1;
@@ -122,26 +204,27 @@ int is_drive_formatted(DriveInfo *drive)
         return 0;
     }
     
-    /* Check for FAT filesystem signatures */
-    /* FAT12/16 check - "FAT12   " or "FAT16   " at offset 54 */
-    if ((sector[54] == 'F' && sector[55] == 'A' && sector[56] == 'T' && sector[57] == '1') ||
-        (sector[82] == 'F' && sector[83] == 'A' && sector[84] == 'T' && sector[85] == '3')) {
-        
-        /* Detect specific filesystem type */
-        if (sector[54] == 'F' && sector[57] == '1' && sector[58] == '2') {
+    /* Detect filesystem type from boot sector filesystem ID 
+     * FAT12/FAT16: offset 54 (after extended boot record at 36)
+     * FAT32: offset 82 (after different extended fields)
+     */
+    drive->fs_type = FS_TYPE_UNKNOWN;
+    
+    /* Check FAT32 format first (offset 82) */
+    if (sector[82] == 'F' && sector[83] == 'A' && sector[84] == 'T' &&
+        sector[85] == '3' && sector[86] == '2') {
+        drive->fs_type = FS_TYPE_FAT32;
+    }
+    /* Check FAT12/FAT16 format (offset 54) */
+    else if (sector[54] == 'F' && sector[55] == 'A' && sector[56] == 'T') {
+        if (sector[57] == '1' && sector[58] == '2') {
             drive->fs_type = FS_TYPE_FAT12;
-        } else if (sector[54] == 'F' && sector[57] == '1' && sector[58] == '6') {
+        } else if (sector[57] == '1' && sector[58] == '6') {
             drive->fs_type = FS_TYPE_FAT16;
-        } else if (sector[82] == 'F' && sector[85] == '3' && sector[86] == '2') {
-            drive->fs_type = FS_TYPE_FAT32;
-        } else {
-            drive->fs_type = FS_TYPE_UNKNOWN;
         }
-        
-        return 1;
     }
     
-    return 0;
+    return 1;
 }
 
 /* Initialize mount table */
@@ -180,6 +263,9 @@ MountResult mount_drive(MountTable *table, DriveInfo *drive)
         }
     }
     
+    /* Sync current filesystem before switching drives */
+    fileops_sync();
+    
     /* Automatically unmount all previously mounted drives */
     for (i = 0; i < MAX_MOUNTS; i++) {
         if (table->mounts[i].is_mounted) {
@@ -206,6 +292,12 @@ MountResult mount_drive(MountTable *table, DriveInfo *drive)
             /* Set as current mount */
             table->current_mount = i;
             
+            /* Set current drive for fileops sync operations */
+            fileops_set_current_drive((void*)drive);
+            
+            /* Load filesystem from drive into ramdisk */
+            fileops_load_from_drive((void*)drive);
+            
             kprint("Automount: Successfully mounted ");
             kprint(drive->idNAME);
             kprint(" (");
@@ -230,6 +322,9 @@ MountResult unmount_drive(MountTable *table, int mount_index)
         return MOUNT_ERROR_INVALID_DRIVE;
     }
     
+    /* Sync filesystem to drive before unmounting */
+    fileops_sync();
+    
     table->mounts[mount_index].is_mounted = 0;
     table->mounts[mount_index].drive = 0;
     table->mounts[mount_index].mount_point[0] = '\0';
@@ -243,8 +338,15 @@ MountResult unmount_drive(MountTable *table, int mount_index)
         for (i = 0; i < MAX_MOUNTS; i++) {
             if (table->mounts[i].is_mounted) {
                 table->current_mount = i;
+                /* Update fileops current drive */
+                fileops_set_current_drive((void*)table->mounts[i].drive);
                 break;
             }
+        }
+        
+        /* If no mounts left, clear current drive */
+        if (table->current_mount == -1) {
+            fileops_set_current_drive((void*)0);
         }
     }
     
@@ -303,4 +405,27 @@ int set_current_drive(MountTable *table, const char *drive_id)
     }
     
     return 0;
+}
+/* Wrapper for fileops to write sectors to drive */
+int ata_write_sector_from_fileops(void *drive, unsigned int lba, const void *buffer)
+{
+    DriveInfo *drive_info = (DriveInfo*)drive;
+    
+    if (!drive_info || !drive_info->present) {
+        return 0;
+    }
+    
+    return ata_write_sector(drive_info, lba, buffer);
+}
+
+/* Wrapper for fileops to read sectors from drive */
+int ata_read_sector_from_fileops(void *drive, unsigned int lba, void *buffer)
+{
+    DriveInfo *drive_info = (DriveInfo*)drive;
+    
+    if (!drive_info || !drive_info->present) {
+        return 0;
+    }
+    
+    return ata_read_sector(drive_info, lba, buffer);
 }

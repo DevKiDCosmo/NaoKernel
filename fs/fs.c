@@ -49,8 +49,13 @@ static int ata_identify(unsigned short base_port, int is_slave, unsigned int *to
     unsigned short data[256];
     int i;
 
-    /* Select drive */
-    outb(base_port + 6, is_slave ? 0xB0 : 0xA0);
+    /* Select drive (LBA28 mode) */
+    outb(base_port + 6, is_slave ? 0xF0 : 0xE0);
+
+    /* Wait for drive to stabilize */
+    for (int delay = 0; delay < 5000; delay++) {
+        inb(base_port + 7);
+    }
 
     /* Zero sector count and LBA registers as per spec */
     outb(base_port + 2, 0);
@@ -108,8 +113,8 @@ static int ide_detect_drive(unsigned short base_port, int is_slave)
 {
     unsigned char status;
     
-    /* Select drive (0xA0 = master, 0xB0 = slave) */
-    outb(base_port + 6, is_slave ? 0xB0 : 0xA0);
+    /* Select drive (0xE0 = master, 0xF0 = slave) in LBA28 mode */
+    outb(base_port + 6, is_slave ? 0xF0 : 0xE0);
     
     /* Small delay */
     for (int i = 0; i < 1000; i++) {

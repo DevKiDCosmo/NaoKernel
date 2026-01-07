@@ -7,6 +7,14 @@
 extern void kprint(const char *str);
 extern void kprint_newline(void);
 
+/* Forward declaration for ATA write/read - defined in mount.c */
+/* Note: We need to declare this to call write back to drive */
+extern int ata_write_sector_from_fileops(void *drive, unsigned int lba, const void *buffer);
+extern int ata_read_sector_from_fileops(void *drive, unsigned int lba, void *buffer);
+
+/* Current mounted drive (set by fileops_set_current_drive) */
+static void *current_drive = (void*)0;
+
 /* Simple cluster allocation bitmap (1 bit per cluster) */
 static unsigned char cluster_bitmap[MAX_DATA_CLUSTERS / 8 + 1];
 
@@ -135,8 +143,16 @@ int fileops_init(void)
 /* Format filesystem: create empty FAT and root directory */
 int fileops_format(void)
 {
+    unsigned char boot_sector[BLOCK_SIZE];
     unsigned char fat_block[BLOCK_SIZE];
     unsigned char root_block[BLOCK_SIZE];
+    
+    /* Block 0: Boot sector with signature */
+    memset_local(boot_sector, 0, BLOCK_SIZE);
+    /* Set boot signature (required for drive to appear formatted) */
+    boot_sector[510] = 0x55;
+    boot_sector[511] = 0xAA;
+    ramdisk_write(0, boot_sector);
     
     /* Block 1-2: FAT (initialize to 0) */
     memset_local(fat_block, 0, BLOCK_SIZE);
@@ -148,6 +164,104 @@ int fileops_format(void)
     ramdisk_write(ROOT_DIR_BLOCK, root_block);
     
     kprint("  Ramdisk formatted (FAT12-style).\n");
+    
+    /* Sync to mounted drive if available */
+    fileops_sync();
+    
+    return 0;
+}
+
+/* Set current mounted drive for sync operations */
+void fileops_set_current_drive(void *drive)
+{
+    current_drive = drive;
+}
+
+/* Sync filesystem to mounted drive */
+int fileops_sync(void)
+{
+    unsigned int lba;
+    unsigned int block_num;
+    unsigned char *block_data;
+    
+    /* If no drive mounted, just succeed (ramdisk is persistent for current session) */
+    if (current_drive == (void*)0) {
+        return 0;
+    }
+    
+    kprint("  Syncing filesystem to drive...\n");
+    
+    /* Write boot sector (block 0) */
+    block_data = ramdisk_get_block(0);
+    if (block_data != (unsigned char*)0) {
+        if (!ata_write_sector_from_fileops(current_drive, 0, block_data)) {
+            kprint("Error: Failed to sync boot sector\n");
+            return -1;
+        }
+    }
+    
+    /* Write FAT blocks (blocks 1-2 map to LBA 1-2) */
+    for (block_num = 1; block_num < 3; block_num++) {
+        block_data = ramdisk_get_block(block_num);
+        if (block_data != (unsigned char*)0) {
+            lba = block_num;
+            if (!ata_write_sector_from_fileops(current_drive, lba, block_data)) {
+                kprint("Error: Failed to sync FAT block\n");
+                return -1;
+            }
+        }
+    }
+    
+    /* Write root directory block (block 3 maps to LBA 3) */
+    block_data = ramdisk_get_block(ROOT_DIR_BLOCK);
+    if (block_data != (unsigned char*)0) {
+        lba = ROOT_DIR_BLOCK;
+        if (!ata_write_sector_from_fileops(current_drive, lba, block_data)) {
+            kprint("Error: Failed to sync root directory\n");
+            return -1;
+        }
+    }
+    
+    /* Write data blocks (blocks 4+ map to LBA 4+) */
+    for (block_num = DATA_BLOCK_START; block_num < MAX_BLOCKS; block_num++) {
+        block_data = ramdisk_get_block(block_num);
+        if (block_data != (unsigned char*)0) {
+            lba = block_num;
+            if (!ata_write_sector_from_fileops(current_drive, lba, block_data)) {
+                kprint("Error: Failed to sync data block\n");
+                return -1;
+            }
+        }
+    }
+    
+    return 0;
+}
+
+/* Load filesystem from mounted drive into ramdisk */
+int fileops_load_from_drive(void *drive)
+{
+    unsigned int block_num;
+    unsigned char *block_data;
+    unsigned char sector_buffer[512];
+    
+    /* If no drive provided, just succeed (ramdisk initialized in fileops_init) */
+    if (drive == (void*)0) {
+        return 0;
+    }
+    
+    /* Load all blocks from drive into ramdisk */
+    for (block_num = 0; block_num < MAX_BLOCKS; block_num++) {
+        /* Read from drive */
+        if (!ata_read_sector_from_fileops(drive, block_num, sector_buffer)) {
+            /* Block read failed - initialize as empty */
+            memset_local(sector_buffer, 0, 512);
+        }
+        
+        /* Write to ramdisk */
+        ramdisk_write(block_num, sector_buffer);
+    }
+    
+    kprint("  Filesystem loaded from drive into ramdisk.\n");
     
     return 0;
 }
@@ -255,6 +369,9 @@ int fileops_create_file(const char *name)
     free_entry->start_cluster = 0;
     free_entry->file_size = 0;
     
+    /* Sync to drive */
+    fileops_sync();
+    
     return 0;
 }
 
@@ -274,6 +391,9 @@ int fileops_delete_file(const char *name)
     
     /* Mark entry as deleted */
     entry->name[0] = DIR_ENTRY_DELETED;
+    
+    /* Sync to drive */
+    fileops_sync();
     
     return 0;
 }
@@ -356,6 +476,9 @@ int fileops_write_file(const char *name, const unsigned char *data, unsigned int
     
     entry->file_size = size;
     
+    /* Sync to drive */
+    fileops_sync();
+    
     return size;
 }
 
@@ -431,6 +554,9 @@ int fileops_create_dir(const char *name)
     memcpy_local(free_entry->ext, fext, 3);
     free_entry->attributes = ATTR_DIRECTORY;
     free_entry->file_size = 0;
+    
+    /* Sync to drive */
+    fileops_sync();
     
     return 0;
 }

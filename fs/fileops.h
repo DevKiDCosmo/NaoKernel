@@ -55,6 +55,11 @@ int fileops_copy_file(const char *src_name, const char *dest_name);
 /* Directory operations */
 int fileops_create_dir(const char *name);
 
+/* Persistence/Sync operations - drive is void* to avoid circular includes */
+void fileops_set_current_drive(void *drive);  /* Set mounted drive for sync operations */
+int fileops_sync(void);  /* Flush all filesystem data to mounted drive */
+int fileops_load_from_drive(void *drive);  /* Load filesystem from mounted drive into ramdisk */
+
 /* Utilities */
 void fileops_format_name(const char *src, char *name_out, char *ext_out);
 
